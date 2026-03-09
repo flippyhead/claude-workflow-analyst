@@ -1,8 +1,20 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-workflow-analyst",
+  "description": "Analyze Claude Code session history for workflow insights, ecosystem recommendations, and automation opportunities",
+  "owner": {
+    "name": "Peter Brown",
+    "email": "peter@wagglelabs.com"
+  },
   "plugins": [
     {
       "name": "workflow-analyst",
       "description": "Analyze your Claude Code session history to surface workflow insights, underused features, anti-patterns, ecosystem recommendations, and automation opportunities.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Peter Brown",
+        "email": "peter@wagglelabs.com"
+      },
       "source": "./"
     }
   ]
