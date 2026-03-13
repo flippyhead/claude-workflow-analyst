@@ -26,8 +26,9 @@ A pure SKILL.md skill (no custom scripts) that:
 - **Name:** `brain-sync`
 - **Invocation:** `/brain-sync`
 - **Location:** `skills/brain-sync/SKILL.md`
-- **Arguments:** None — always syncs the current working directory
-- **Plugin:** Registered in `plugin.json` alongside `workflow-analyst`
+- **Arguments:** Optional `--name <project-name>` to override the auto-derived project name
+- **Plugin:** Lives in `skills/brain-sync/` directory (skills are discovered by convention, no `plugin.json` change needed)
+- **Frontmatter:** YAML frontmatter matching existing skill format (`name`, `description`, `argument-hint`)
 
 ## Data Collection
 
@@ -47,9 +48,8 @@ The skill instructs Claude to read these sources from the current project direct
 - Top-level directory listing to understand shape and architecture
 
 ### Strategic Context
-- `docs/` folder contents if present
+- `docs/` folder — list directory first, then selectively read files that reveal project direction (specs, architecture docs, roadmaps). Do not read every file.
 - `GOALS.md`, `TODO.md`, or similar planning files if they exist
-- Any other files that reveal project direction
 
 Claude reads these files directly and synthesizes a mental model of:
 - What the project is and does
@@ -63,7 +63,12 @@ Claude reads these files directly and synthesizes a mental model of:
 Read project files as described above. Build a comprehensive understanding of the project's current state.
 
 ### Step 2: Search Brain for Existing Knowledge
-Call `mcp__ai-brain__search_thoughts` with the project name (derived from directory name, package.json name, or README title) to find what's already stored.
+Derive the project name using this precedence (or use `--name` override if provided):
+1. `package.json` / `Cargo.toml` / `pyproject.toml` name field
+2. README.md first heading
+3. Directory name (fallback)
+
+Call `mcp__ai-brain__search_thoughts` with the project name to find what's already stored.
 
 ### Step 3: Synthesize and Diff
 Compare current project state against existing brain thoughts:
@@ -78,7 +83,21 @@ Based on the diff:
 - **Subsequent syncs** (existing thoughts found): Capture only meaningful updates, each framed as an update (e.g., "Update: seikai.tv added Anki export, deployed to production"). Skip unchanged information.
 - **No changes**: Tell the user the brain is already up to date. Do not capture anything.
 
-Each thought is a dense, factual summary. Always include the project name so future `search_thoughts` queries find it.
+Each thought is a dense, factual summary. The `capture_thought` API accepts only a `content` string, so structure the content with the project name first for searchability.
+
+**Thought format examples:**
+
+First sync:
+```
+Project: seikai.tv — Japanese language learning platform built on YouTube content + spaced repetition. Tech stack: Next.js, TypeScript, Prisma, PostgreSQL. Features: JLPT level categorization, flashcards, furigana toggling, video timestamps, Anki export. Currently free-to-try with premium tier TBD. Active development on mobile optimization.
+```
+
+Update sync:
+```
+Update: seikai.tv — Added Anki deck export feature (March 2026). Deployed to production. Next focus: premium tier pricing and Stripe integration. Recent commits show work on mobile-responsive flashcard UI.
+```
+
+If a comprehensive summary would be excessively long, split into 2-3 focused thoughts (e.g., one for project overview, one for current status/roadmap).
 
 ### Step 5: Report to User
 Briefly tell the user:
@@ -99,13 +118,12 @@ The brain API has no update/delete. We work around this by:
 
 Old thoughts remain but are superseded contextually by newer ones.
 
-### No arguments
-The skill always operates on the current working directory. There's no need for flags — it reads what's there and syncs what's changed.
+### Optional name override
+The skill defaults to auto-deriving the project name but accepts `--name` for cases where the repo name doesn't match how the user thinks of the project (e.g., repo is `copa-ai-commander` but user calls it "COPA Commander").
 
 ## File Changes Required
 
-1. **New file:** `skills/brain-sync/SKILL.md` — the skill definition
-2. **Modified:** `.claude-plugin/plugin.json` — register the new skill
+1. **New file:** `skills/brain-sync/SKILL.md` — the skill definition (with YAML frontmatter matching existing skill format)
 
 ## Out of Scope
 
