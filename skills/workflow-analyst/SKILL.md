@@ -1,12 +1,14 @@
 ---
 name: workflow-analyst
-description: Analyze your Claude Code session history to surface workflow insights, underused features, anti-patterns, and automation opportunities. Run weekly or on-demand.
+description: Analyze your Claude Code and Cowork session history to surface actionable workflow insights. Diagnoses failures, identifies automation opportunities, aligns time allocation with goals, and flags repeated knowledge worth saving.
 argument-hint: [--days N]
 ---
 
 # AI Workflow Analyst
 
-Analyze recent Claude Code sessions to generate actionable workflow insights.
+Analyze recent Claude Code and Cowork sessions to generate actionable workflow insights.
+
+Uses the `@ai-brain/workflow-analyzer` npm package for session parsing and enrichment. Claude does the reasoning.
 
 ## Arguments
 
@@ -15,127 +17,132 @@ Analyze recent Claude Code sessions to generate actionable workflow insights.
 
 Parse the days value from `$ARGUMENTS` if provided. Default to 7.
 
-The skill's base directory is provided at the top when this skill is loaded (e.g., "Base directory for this skill: /path/to/..."). Use that path as `SKILL_DIR` in all commands below.
-
 ## Workflow
 
-### Step 1: Parse Session Data
+### Step 1: Parse & Enrich Session Data
 
-Run the session parser to extract structured data from recent sessions:
-
-```bash
-node ${SKILL_DIR}/parse-sessions.mjs --days ${DAYS} --output /tmp/workflow-analyst-sessions.json
-```
-
-Then run the history parser:
+Run the workflow-analyzer CLI to parse and enrich sessions from all configured sources (Claude Code + Cowork):
 
 ```bash
-node ${SKILL_DIR}/parse-history.mjs --days ${DAYS} > /tmp/workflow-analyst-history.json
+npx @ai-brain/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/workflow-analyzer-parsed.json
 ```
 
-Read both output files. If totalSessions === 0, report "No activity in the last N days" to the user and stop.
+Read the output file. It contains `{ sessions: [...], sessionGroups: [...] }`.
 
-### Step 1b: Refresh Ecosystem Cache
+If sessions is empty, report "No activity in the last N days" and stop.
 
-Run the ecosystem cache refresh script. Pass the session and history data files so it can infer tech stack and prompt themes:
+Otherwise, note the summary: how many sessions, which sources (claude-code, cowork), how many session groups.
 
-```bash
-node ${SKILL_DIR}/refresh-ecosystem.mjs \
-  --sessions-json /tmp/workflow-analyst-sessions.json \
-  --history-json /tmp/workflow-analyst-history.json
-```
-
-This writes the ecosystem cache to `/tmp/workflow-analyst-ecosystem-cache.json`. If the script fails, skip ecosystem discovery in Step 4 and continue with the rest of the analysis.
-
-### Step 2: Research Latest Capabilities
-
-Use web search to find the latest Claude Code features and tips. Run these searches:
-
-1. "Claude Code new features changelog 2026"
-2. "Claude Code tips best practices"
-3. "Anthropic Claude Code release notes"
-
-Summarize findings as a list of capabilities and tips. Note any features released in the last 30 days.
-
-If web search is unavailable, skip this step and note it in the report.
-
-### Step 3: Check Previous Insights
+### Step 2: Check Previous Insights
 
 Use the `get_insights` MCP tool to check for existing insights:
 
-1. Call `get_insights` with `status: "new"` — find unresolved insights to avoid repeating
-2. Call `get_insights` with `status: "noted"` — find acknowledged but not-yet-acted-on insights
-3. Call `get_insights` with `status: "dismissed"` — find what the user doesn't want to see again
+1. Call `get_insights` with `status: "new"` — unresolved insights
+2. Call `get_insights` with `status: "noted"` — acknowledged but not acted on
+3. Call `get_insights` with `status: "dismissed"` — things the user doesn't want to see again
 
-Also search the AI Brain for user preferences using `search_thoughts` with query: "User Preference workflow" to understand the user's environment and exclusions.
+Note which deduplication keys and categories to avoid repeating. If the MCP tool is unavailable, skip this step.
 
-Note which insights are still open and which categories have been frequently dismissed so you don't repeat them.
+### Step 3: Fetch User Goals
 
-If the `get_insights` MCP tool is unavailable, fall back to `search_thoughts` with query: "workflow insight claude code".
+Call `get_lists` with `pinned: true` to load the user's current priorities and goals. These are used by the Decision Support analysis below.
+
+If unavailable, skip goal-based analysis.
 
 ### Step 4: Analyze
 
-With all data gathered, produce insights in five categories. Be specific and actionable — reference actual numbers from the parsed data.
+With all data gathered, analyze the parsed sessions and produce insights across four modules. For each insight, you MUST provide a concrete action — never just describe a problem without telling the user what to do about it.
 
-**Feature Discovery:**
-- Compare tool usage stats against known Claude Code tools (Read, Edit, Write, Glob, Grep, Bash, Agent, NotebookEdit, WebFetch, WebSearch, Skill, TaskCreate, TaskUpdate, etc.)
-- Identify tools that were never or rarely used
-- Check if Bash was used for things that dedicated tools handle:
-  - `grep`/`rg` commands in Bash → should use Grep tool
-  - `cat`/`head`/`tail` commands in Bash → should use Read tool
-  - `find`/`ls` commands in Bash → should use Glob tool
-  - `sed`/`awk` commands in Bash → should use Edit tool
-- Cross-reference with newly announced features from Step 2
+**Module A — Root Cause Diagnosis:**
 
-**Workflow Anti-Patterns:**
-- Tools with high failure rates (failures / calls > 30%)
-- Permission denials — which tools and how often
-- Retry sequences — same tool called multiple times in a row after failure
-- Look for specific anti-pattern evidence in the session data
+Look at tool failures in the session data. For each tool with a notable failure rate:
+- Read the actual error messages (not just counts)
+- Diagnose the root cause: is it an auth issue, config problem, API bug, user error, or transient?
+- If fixable: provide the specific command or config change to fix it (`action type: run` or `action type: install`)
+- If not fixable: acknowledge it so the user stops worrying (`action type: acknowledge`)
+- Skip tools with very low failure counts (<3 calls) or very low failure rates (<20%)
 
-**Productivity Patterns:**
-- Sessions per project — which projects get the most attention
-- Time-of-day distribution — when the user is most active
-- Average session duration
-- Model usage breakdown
-- Total user messages and tool calls across all sessions
+**Module B — Direct Automation:**
 
-**Automation Opportunities:**
-- Frequently typed prompts from history (candidates for skills or aliases)
-- Slash commands used most often
-- Patterns that could become hooks, skills, or scheduled tasks
-- Suggest specific skill names for repeated prompt patterns
+Look for patterns that could be automated:
+- **Permission confirmations**: Count short messages like "yes", "y", "a", "ok", "sure" that appear to be tool permission confirmations. If a specific tool triggers many confirmations, suggest an allowedTools config entry (`action type: install` with settings.json patch)
+- **Repeated prompts**: Look at user messages across sessions for frequently typed prompts. If a prompt appears 5+ times, suggest creating a skill or alias (`action type: install` with skill content)
+- **Repeated tool sequences**: Look for the same sequence of 3+ tool calls appearing across sessions. Suggest automation if a pattern repeats 5+ times.
 
-**Ecosystem Discovery:**
-- Read `/tmp/workflow-analyst-ecosystem-cache.json`
-- For available plugins not installed: check if the plugin's name or tags match the user's tech stack or prompt themes. Only recommend if there's a clear relevance match.
-- For installed plugins: check if a newer version is available by comparing install-counts-cache data
-- For MCP servers: report any in `failed` or `needsAuth` status from the cache's `mcpServerHealth`
-- For MCP servers in the registry but not installed: recommend only if they match the user's tech stack or prompt themes
-- Cross-reference against dismissed ecosystem insights from Step 3 to avoid repeating
-- Produce 2-4 ecosystem insights, prioritized by: (1) broken/needs-auth MCP servers, (2) high-install plugins matching usage patterns, (3) plugin updates available
+**Module C — Decision Support:**
+
+Using the session groups and the user's pinned goals from Step 3:
+- Calculate time allocation by project/topic (sessions and minutes)
+- Compare against stated goals — flag misalignments
+- Note cross-platform patterns (e.g., "researched X in Cowork but never implemented in Claude Code")
+- If a project is consuming disproportionate time without being in the goals, surface a decision (`action type: decide`)
+
+**Module D — Knowledge Nudges:**
+
+Look for repeated topics across sessions:
+- Find user prompts that ask about the same thing in multiple sessions (sign the answer should be saved)
+- Detect when the user provides the same context/background repeatedly at session start (should be in CLAUDE.md or memory)
+- For repeated topics, generate a consolidated summary of what to save (`action type: save`)
+
+### Insight Format
 
 For each insight, produce:
-- **Category**: feature-discovery | anti-pattern | productivity | automation | ecosystem
-- **Observation**: What the data shows (include specific numbers)
-- **Recommendation**: Specific, actionable advice
-- **Evidence**: The numbers/data supporting the observation
 
-Aim for 5-10 total insights. Prioritize by impact.
+```json
+{
+  "module": "root-cause | direct-automation | decision-support | knowledge-nudges",
+  "severity": "alert | action | suggestion | info",
+  "title": "One-line summary",
+  "observation": "What the data shows (with specific numbers)",
+  "diagnosis": "Why this is happening (optional)",
+  "action": {
+    "type": "install | run | save | review | decide | acknowledge"
+  },
+  "evidence": [{"metric": "specific numbers"}],
+  "effort": "low | medium | high",
+  "impact": "low | medium | high",
+  "confidence": 0.0-1.0,
+  "deduplicationKey": "unique-key-for-this-insight"
+}
+```
 
-### Step 5: Publish to AI Brain
+Action types:
+- `install`: `{ type: "install", artifact: "filename", content: "file content to install" }`
+- `run`: `{ type: "run", command: "command to run", explanation: "why" }`
+- `save`: `{ type: "save", content: "what to save", destination: "AI Brain / CLAUDE.md / etc" }`
+- `review`: `{ type: "review", summary: "what to look at", links: [] }`
+- `decide`: `{ type: "decide", question: "decision to make", options: ["option 1", "option 2"] }`
+- `acknowledge`: `{ type: "acknowledge", message: "FYI only, no action needed" }`
 
-Call the `create_report` MCP tool with:
+Aim for 5-10 total insights. Prioritize high-impact/low-effort actions. Skip insights that match dismissed deduplication keys from Step 2.
 
-- Report metadata: startDate, endDate, sessionsAnalyzed, totalPrompts, totalToolCalls, projectsActive, modelUsage
-- Array of insights, each with: category, observation, recommendation, evidence
+### Step 5: Publish
 
-If the `create_report` MCP tool is unavailable, fall back to saving individual insights via `capture_thought`.
+Write insights to a temp file and use the CLI to publish:
+
+```bash
+npx @ai-brain/workflow-analyzer@latest publish --insights /tmp/workflow-analyzer-insights.json
+```
+
+The insights JSON file should contain:
+```json
+{
+  "insights": [...],
+  "metadata": {
+    "period": { "since": "ISO date", "until": "ISO date" },
+    "sessionCount": N,
+    "sources": ["claude-code", "cowork"],
+    "modulesRun": ["root-cause", "direct-automation", "decision-support", "knowledge-nudges"]
+  }
+}
+```
+
+Write this file before running the publish command. If publish fails, fall back to saving insights via `create_report` or `capture_thought` MCP tools.
 
 ### Step 6: Summary
 
-After publishing, output a brief summary to the user:
-- How many insights were generated
-- The report period
-- Direct them to the /insights page in the AI Brain web UI to review and provide feedback
-- Top 1-2 "quick win" recommendations
+Output a brief summary:
+- How many insights were generated, by module
+- The report period and session count (including Cowork if any)
+- Top 2-3 "quick win" recommendations (highest impact, lowest effort)
+- Direct the user to /insights in the AI Brain web UI to review and provide feedback

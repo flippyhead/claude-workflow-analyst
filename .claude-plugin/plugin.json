@@ -1,7 +1,7 @@
 {
   "name": "workflow-analyst",
-  "description": "Analyze your Claude Code session history to surface workflow insights, underused features, anti-patterns, ecosystem recommendations, and automation opportunities.",
-  "version": "1.1.0",
+  "description": "Analyze your Claude Code and Cowork session history to surface actionable workflow insights — root cause diagnosis, automation opportunities, goal alignment, and knowledge management.",
+  "version": "2.0.0",
   "author": {
     "name": "Peter Brown",
     "url": "https://ptb.io"
