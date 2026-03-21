@@ -66,6 +66,8 @@ export const listItemFields = {
 Run: `cd /Users/peterbrown/Development/ai-brain && pnpm --filter convex exec npx convex dev --once --typecheck disable` or the equivalent type check command.
 Expected: No errors. Schema auto-picks up the new fields from listItemFields.
 
+**Note:** `v.record(v.string(), v.any())` is a new validator pattern for this codebase (existing unstructured fields use `v.any()`). If the schema push fails with `v.record`, fall back to `properties: v.optional(v.any())` and update all downstream tasks accordingly.
+
 - [ ] **Step 3: Commit**
 
 ```bash
@@ -441,7 +443,7 @@ Find the `updateListItem` tool definition (around line 572). Add the 3 optional 
         .describe("New position for reordering"),
       url: z.string().optional().describe("New URL for the item"),
       description: z.string().optional().describe("New description for the item"),
-      properties: z.record(z.string(), z.any()).optional().describe("Custom properties object (merged, not replaced)"),
+      properties: z.record(z.string(), z.any()).optional().describe("Custom properties object (replaces entire properties field — caller should merge with existing before sending)"),
     },
     async ({ itemId, title, status, position, url, description, properties }) => {
       const result = await convex.mutation(
@@ -473,26 +475,65 @@ Find the `updateListItem` tool definition (around line 572). Add the 3 optional 
 
 - [ ] **Step 3: Update TypeScript type definitions**
 
-Update the `ListDetail` type (around line 487) and `OpenItem` type (around line 623) to include the new fields:
+Update the `ListDetail` type (around line 487) to include new fields in items array:
 
 ```typescript
-// In ListDetail type, items array:
+      type ListDetail = {
+        listId: string;
+        name: string;
+        pinned: boolean;
+        items: Array<{
+          itemId: string;
+          title: string;
+          status: string;
+          position: number;
+          completedAt?: number;
           url?: string;
           description?: string;
           properties?: Record<string, unknown>;
-
-// In OpenItem type:
-          url?: string;
-          description?: string;
-          properties?: Record<string, unknown>;
+        }>;
+      };
 ```
 
-- [ ] **Step 4: Verify it compiles**
+Update the `OpenItem` type (around line 623):
+
+```typescript
+      type OpenItem = {
+        itemId: string;
+        title: string;
+        position: number;
+        listId: string;
+        listName: string;
+        url?: string;
+        description?: string;
+        properties?: Record<string, unknown>;
+      };
+```
+
+- [ ] **Step 4: Update getList tool response formatting to include enriched fields**
+
+The `getList` tool handler (around line 504) formats items as human-readable text with checkboxes. The new fields must be included in the text output, otherwise MCP clients (like scout/discover) cannot see them. Update the item formatting in the getList handler to include url and description when present. For example:
+
+```typescript
+// In the getList handler's item formatting:
+const itemLines = result.items.map((item) => {
+  const check = item.status === "done" ? "x" : " ";
+  let line = `[${check}] ${item.title} (id: ${item.itemId})`;
+  if (item.url) line += `\n    URL: ${item.url}`;
+  if (item.description) line += `\n    ${item.description}`;
+  if (item.properties) line += `\n    Properties: ${JSON.stringify(item.properties)}`;
+  return line;
+});
+```
+
+Apply the same pattern to the `getOpenItems` handler (around line 650) — include url, description, and properties in the text output for each item.
+
+- [ ] **Step 5: Verify it compiles**
 
 Run: `cd /Users/peterbrown/Development/ai-brain && pnpm --filter web build` (or `tsc --noEmit`)
 Expected: No type errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 cd /Users/peterbrown/Development/ai-brain
@@ -521,7 +562,7 @@ Use the ai-brain MCP tools to test:
 1. Create a test list: `create_list` with name `[Scout] Test`
 2. Create an item with enriched fields: `create_list_item` with title "Test item", url "https://example.com", description "A test", properties `{"category": "test"}`
 3. Read it back: `get_list` and verify url/description/properties are in the response
-4. Clean up: delete the test list
+4. Clean up: archive the test list using `archive_list` (there is no delete MCP tool)
 
 - [ ] **Step 3: Commit any fixes if needed**
 
@@ -751,7 +792,7 @@ Pull from multiple sources. Each is optional — work with whatever is available
 Call `get_lists` with `pinned: true` to get the user's stated goals and priorities. Extract goal titles and descriptions.
 
 **Brain thoughts:**
-Call `browse_recent` to get recent thoughts (last 14 days). Note recurring topics and themes.
+Call `browse_recent` with a generous `limit` (e.g., 50) to get recent thoughts. Note: `browse_recent` does not support date filtering — it returns the N most recent thoughts regardless of date. Filter results client-side by checking each thought's creation date, keeping only those from the last 14 days. Note recurring topics and themes.
 
 **Session history:**
 Run: `npx @flippyhead/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/discover-sessions.json`
@@ -832,8 +873,8 @@ For each item that was recommended, update its properties to include:
 - `matchedGoals`: array of goal titles it matched against
 - `matchedPatterns`: array of usage patterns that triggered the match
 
-**Brain mode:** Use `update_list_item` with updated properties (merge with existing properties, don't replace).
-**Local mode:** Update the JSON file.
+**Brain mode:** The `update_list_item` MCP tool replaces the entire `properties` field — it does NOT merge. So you must: (1) read the item's existing properties from the `get_list` response, (2) merge the new keys (`lastRecommended`, `matchedGoals`, `matchedPatterns`) into the existing properties object client-side, (3) send the full merged object to `update_list_item`.
+**Local mode:** Update the JSON file (same merge-then-write approach).
 
 Items with `lastRecommended` within the last 14 days should be deprioritized (reduce score by 2) on subsequent runs to avoid re-surfacing the same recommendations.
 
