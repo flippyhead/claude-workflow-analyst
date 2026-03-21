@@ -39,15 +39,23 @@ Add 3 optional fields to the `listItems` table:
 // In listItems validator
 url: v.optional(v.string()),
 description: v.optional(v.string()),
-properties: v.optional(v.any()),  // flexible JSON object
+properties: v.optional(v.record(v.string(), v.any())),  // key-value object, always a flat-ish map
 ```
 
 ### MCP Tool Changes
 
-- `create_list_item` — accepts optional `url`, `description`, `properties` params
-- `update_list_item` — accepts optional `url`, `description`, `properties` params
-- `get_list` — includes new fields in item responses
-- `get_open_items` — includes new fields in item responses
+**Input changes (accept new optional params):**
+- `create_list_item` — add optional `url`, `description`, `properties` params
+- `update_list_item` — add optional `url`, `description`, `properties` params
+
+**Output changes (include new fields in responses):**
+- `get_list` — return `url`, `description`, `properties` on each item in the items array
+- `get_open_items` — return `url`, `description`, `properties` on each item
+- `get_lists` — verify it returns list `name` field (needed for `[Scout]` prefix matching); no schema change expected but confirm
+
+**Zod schema changes (MCP server endpoint):**
+- Update Zod schemas in the Next.js MCP server endpoint for `create_list_item` and `update_list_item` to accept the new fields
+- Update response schemas for `get_list` and `get_open_items` to include the new fields
 
 No new MCP tools. No migration. All fields optional — existing items unaffected.
 
@@ -61,6 +69,16 @@ No new MCP tools. No migration. All fields optional — existing items unaffecte
 ### Location
 
 `plugins/workflow-analyst/skills/scout/SKILL.md`
+
+### Frontmatter
+
+```yaml
+---
+name: scout
+description: Build a catalogue of AI tools, features, and techniques from external sources. Scans changelogs, HN, GitHub, and your inbox.
+argument-hint: [--sources <all|feeds|manual>] [--days N]
+---
+```
 
 ### Arguments
 
@@ -79,15 +97,31 @@ Look for lists with a `[Scout]` prefix. Create if missing:
 - `[Scout] MCP Ecosystem` — servers, plugins, integrations
 - `[Scout] AI Tools & Techniques` — broader tools, prompting, workflows
 
-If brain MCP is unavailable, use local JSON file at `~/.claude/scout-catalogue.json`.
+If brain MCP is unavailable, use local JSON file at `~/.claude/scout-catalogue.json` with this structure:
+
+```json
+{
+  "lists": {
+    "[Scout] Inbox": {
+      "items": [
+        { "title": "...", "url": "...", "description": "...", "status": "open", "properties": {} }
+      ]
+    },
+    "[Scout] Claude Code": { "items": [...] }
+  },
+  "lastUpdated": "2026-03-21T00:00:00Z"
+}
+```
 
 **Step 2: Scan structured sources.**
 
-Hit known, high-signal endpoints:
-- **Anthropic changelog/blog** — web fetch for new releases, features
-- **GitHub** — trending MCP servers, Claude Code releases, plugin marketplace
-- **Hacker News** — Algolia API search for "claude", "anthropic", "mcp server", "ai agent", etc.
-- **YouTube** (if searchable via web) — tutorials, workflow demos
+Hit known, high-signal endpoints using Claude Code's `WebSearch` for discovery queries and `WebFetch` for direct URLs/APIs. Limit to **10-15 items per source** to keep runs manageable. If a source fails (timeout, rate limit, format change), log a warning and continue to the next source — never fail the entire run because one source is down.
+
+Sources:
+- **Anthropic changelog/blog** — `WebFetch` the changelog page, extract recent entries
+- **GitHub** — `WebSearch` for trending MCP servers, Claude Code releases, plugin marketplace
+- **Hacker News** — `WebFetch` the Algolia API (`hn.algolia.com/api/v1/search_by_date?query=...&tags=story`) for "claude", "anthropic", "mcp server", "ai agent"
+- **YouTube** (if searchable via web) — `WebSearch` for tutorials, workflow demos
 
 For each result: extract title, url, description, date. Deduplicate against existing catalogue items by URL.
 
@@ -101,7 +135,7 @@ Check `[Scout] Inbox` list for manually added items (just a title + url, or even
 
 **Step 4: Enrich and tag.**
 
-For each new entry, populate `properties`:
+For each new entry, populate `properties` following the Properties Schema Convention (see below):
 
 ```json
 {
@@ -116,10 +150,33 @@ For each new entry, populate `properties`:
 
 Brief summary: N new items catalogued, N inbox items processed, N duplicates skipped. List the most notable new finds.
 
-### Properties
+### Properties Schema Convention
+
+Scout and discover share a contract for the `properties` field on catalogue items. This is a convention, not enforced by the database.
+
+**Fields set by scout:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `category` | string | One of: `claude-code`, `mcp`, `api`, `agent-sdk`, `prompting`, `tooling`, `workflow`, `general-ai` |
+| `relevanceHints` | string[] | Free-text tags describing what workflows/goals this helps with |
+| `source` | string | One of: `anthropic-changelog`, `hackernews`, `github`, `youtube`, `manual` |
+| `discoveredAt` | string | ISO date when the item was first catalogued |
+
+**Fields set by discover:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `lastRecommended` | string | ISO date when this was last surfaced to the user |
+| `matchedGoals` | string[] | Which user goals this was matched against |
+| `matchedPatterns` | string[] | Which usage patterns triggered the match |
+
+Both skills must preserve fields set by the other — never overwrite the entire `properties` object, only merge new keys.
+
+### Behavioral Properties
 
 - **Idempotent** — running twice won't duplicate entries (dedup by URL)
-- **Incremental** — only processes new items since last run
+- **Incremental** — web sources are bounded by `--days N`; inbox items are considered "processed" once moved out of the Inbox list to a category list
 - **Source-independent** — each source is optional; partial runs are fine
 
 ## Part 3: Discover Skill (`/discover`)
@@ -127,6 +184,16 @@ Brief summary: N new items catalogued, N inbox items processed, N duplicates ski
 ### Location
 
 `plugins/workflow-analyst/skills/discover/SKILL.md`
+
+### Frontmatter
+
+```yaml
+---
+name: discover
+description: Match catalogued AI tools and techniques against your goals and usage patterns. Surfaces personalized recommendations.
+argument-hint: [--days N] [--focus <category>]
+---
+```
 
 ### Arguments
 
@@ -146,7 +213,7 @@ Read `[Scout]` lists from brain (or local JSON fallback). Filter to items with s
 Pull from multiple sources, all optional — work with whatever is available:
 - **Brain goals** — `get_lists` with `pinned: true`
 - **Brain thoughts** — `browse_recent` for recent topics and interests
-- **Session history** — `npx @flippyhead/workflow-analyzer@latest parse --since N` for actual tools used, projects worked on, patterns
+- **Session history** — `npx @flippyhead/workflow-analyzer@latest parse --since N` for actual tools used, projects worked on, patterns. If session history exceeds 50 sessions, summarize the top patterns (most-used tools, most-active projects, recurring topics) rather than loading raw data.
 - **Current environment** — installed MCP servers (`.mcp.json` files), Claude Code settings, installed plugins
 
 **Step 3: Match and rank.**
