@@ -110,7 +110,25 @@ Limit output to:
 
 If no items score above 3, report: "Nothing in the current catalogue connects strongly to your goals and usage patterns. The catalogue may need more entries — try running `/scout` or adding items to `[Scout] Inbox`."
 
-### Step 5: Update Catalogue State
+### Step 5: Publish as Insights
+
+**Brain mode:** Publish the recommendations as insights using `create_report` so they appear in the AI Brain insights UI. This is the primary output of discover — not just terminal text.
+
+Call `create_report` with:
+- `startDate` / `endDate`: the period covered by session history
+- `sessionsAnalyzed`, `totalPrompts`, `totalToolCalls`: from parsed session data (use 0 if session history unavailable)
+- `projectsActive`: from session data (use empty array if unavailable)
+- `modelUsage`: from session data (use empty object if unavailable)
+- `insights`: array of recommendations, each with:
+  - `category`: use `"feature-discovery"` for Act Now and Worth Exploring items, `"ecosystem"` for broader tools/techniques
+  - `observation`: what the data shows — cite the specific goal, usage pattern, or environment detail that triggered the match
+  - `recommendation`: the concrete action to take
+  - `evidence`: include the score breakdown (goal alignment, usage gap, recency, effort/impact) and total score
+  - `links`: array of `{label, url}` for the catalogue item URL and any related resources
+
+Only publish items scoring 5+ (Act Now and Worth Exploring tiers). On Your Radar items are too low-signal for the insights UI — just mention them in the terminal summary.
+
+### Step 6: Update Catalogue State
 
 For each item that was recommended, update its properties to include:
 - `lastRecommended`: today's ISO date
@@ -122,11 +140,9 @@ For each item that was recommended, update its properties to include:
 
 Items with `lastRecommended` within the last 14 days should be deprioritized (reduce score by 2) on subsequent runs to avoid re-surfacing the same recommendations.
 
-### Step 6: Optionally Save to Brain
+### Step 7: Summary
 
-If brain MCP is available, offer:
-
-"Want me to save a discovery digest to your brain? This helps weekly-review track what's been recommended."
-
-If yes, call `capture_thought` with:
-"Discovery digest (${date}): Reviewed ${N} catalogue items against ${M} goals. Top recommendations: [1-2 sentence summary of Act Now items]. Key themes: [categories with highest scores]."
+Output a brief terminal summary:
+- How many insights were published to the brain
+- The top 2-3 "Act Now" recommendations (one line each)
+- Direct the user to /insights in the AI Brain web UI to review and provide feedback
