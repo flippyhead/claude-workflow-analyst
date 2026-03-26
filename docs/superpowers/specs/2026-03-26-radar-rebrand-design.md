@@ -74,7 +74,7 @@ No `claude-` prefix on any product-facing name. "Radar" and "Open Brain" are pla
 **Argument consistency:**
 - `--days N` — lookback window (all skills)
 - `--focus <category>` — category filter (recommend only)
-- `--sources <all|feeds|manual>` — source filter (scan only)
+- `--sources <all|feeds|manual>` — source filter (scan only). "feeds" = structured external sources (Anthropic, HN, GitHub, YouTube, dependency changelogs). "manual" = process user-added inbox items only.
 
 ### Open Brain Plugin Skills (Unchanged)
 
@@ -97,7 +97,7 @@ Every radar skill works without brain. Brain adds persistence, cross-session his
 | Skill | Without Brain | With Brain |
 |-------|--------------|------------|
 | `/radar-analyze` | Parses sessions, prints insights to terminal | Also publishes insights via `create_report`, checks for duplicates via `get_insights` |
-| `/radar-scan` | Scans sources, prints catalogue to terminal, stores locally at `~/.claude/radar-catalogue.json` (auto-created on first run; migrates from `~/.claude/scout-catalogue.json` if found) | Also stores catalogue in `[Scout]` brain lists, deduplicates across runs |
+| `/radar-scan` | Scans sources, prints catalogue to terminal, stores locally at `~/.claude/radar-catalogue.json` (auto-created on first run; migrates from `~/.claude/scout-catalogue.json` if found) | Also stores catalogue in `[Radar]` brain lists, deduplicates across runs |
 | `/radar-recommend` | Matches catalogue against environment + session history | Also loads goals and recent thoughts, publishes recommendations as insights |
 | `/radar` | Runs scan then recommend in terminal-only mode | Full brain-enhanced pipeline |
 
