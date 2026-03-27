@@ -1,7 +1,7 @@
 {
   "name": "radar",
   "description": "Your AI development radar — workflow intelligence and persistent memory for Claude Code and Cowork",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "author": {
     "name": "Peter Brown",
     "url": "https://ptb.io"
