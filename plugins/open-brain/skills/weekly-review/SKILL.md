@@ -49,7 +49,7 @@ Flag:
 - Momentum shifts — "[Topic] went from [X]% to [Y]% of sessions week over week"
 
 If no workflow insights are available, display instead:
-> "Install the `workflow-analyst` plugin (`/plugin install workflow-analyst@claude-workflow-analyst`) for time allocation analysis."
+> "Install the `radar` plugin (`/plugin install radar@flippyhead/radar`) for time allocation analysis."
 
 ---
 
