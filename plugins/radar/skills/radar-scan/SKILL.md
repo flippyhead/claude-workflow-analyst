@@ -1,10 +1,10 @@
 ---
-name: scout
-description: Build a catalogue of AI tools, features, and techniques from external sources. Scans dependency changelogs, HN, GitHub, and your inbox.
+name: radar-scan
+description: Scan external sources for AI tools, features, and techniques. Builds a discovery catalogue from dependency changelogs, HN, GitHub, YouTube, and your inbox.
 argument-hint: [--sources <all|feeds|manual>] [--days N]
 ---
 
-# Scout — AI Discovery Catalogue Builder
+# Radar Scan — Discovery Catalogue Builder
 
 Build and maintain a catalogue of AI tools, features, and techniques from external sources. Runs independently of your personal context.
 
@@ -24,25 +24,27 @@ Check if the ai-brain MCP tools are available (try calling `get_lists`).
 
 **If brain MCP is available:**
 
-Call `get_lists` and look for lists with names starting with `[Scout]`. Create any that are missing:
-- `[Scout] Inbox` — raw links dropped by user for enrichment
-- `[Scout] Claude Code` — features, settings, tips
-- `[Scout] MCP Ecosystem` — servers, plugins, integrations
-- `[Scout] AI Tools & Techniques` — broader tools, prompting, workflows
+Call `get_lists` and look for lists with names starting with `[Radar]`. Create any that are missing:
+- `[Radar] Inbox` — raw links dropped by user for enrichment
+- `[Radar] Claude Code` — features, settings, tips
+- `[Radar] MCP Ecosystem` — servers, plugins, integrations
+- `[Radar] AI Tools & Techniques` — broader tools, prompting, workflows
 
 Use `create_list` for each missing list.
 
 **If brain MCP is unavailable:**
 
-Use local JSON file at `~/.claude/scout-catalogue.json`. Read it if it exists, or initialize with empty structure:
+Use local JSON file at `~/.claude/radar-catalogue.json`. Read it if it exists, or initialize with empty structure.
+
+If `~/.claude/radar-catalogue.json` does not exist but `~/.claude/scout-catalogue.json` does, rename `~/.claude/scout-catalogue.json` to `~/.claude/radar-catalogue.json` and use it.
 
 ```json
 {
   "lists": {
-    "[Scout] Inbox": { "items": [] },
-    "[Scout] Claude Code": { "items": [] },
-    "[Scout] MCP Ecosystem": { "items": [] },
-    "[Scout] AI Tools & Techniques": { "items": [] }
+    "[Radar] Inbox": { "items": [] },
+    "[Radar] Claude Code": { "items": [] },
+    "[Radar] MCP Ecosystem": { "items": [] },
+    "[Radar] AI Tools & Techniques": { "items": [] }
   },
   "lastUpdated": null
 }
@@ -50,9 +52,9 @@ Use local JSON file at `~/.claude/scout-catalogue.json`. Read it if it exists, o
 
 ### Step 2: Load Existing Catalogue
 
-Load all items from `[Scout]` lists to build a set of known URLs for deduplication.
+Load all items from `[Radar]` lists to build a set of known URLs for deduplication.
 
-**Brain mode:** Call `get_list` for each `[Scout]` list. Collect all item URLs into a set.
+**Brain mode:** Call `get_list` for each `[Radar]` list. Collect all item URLs into a set.
 **Local mode:** Read from the JSON file.
 
 ### Step 2.5: Scan Project Dependencies
@@ -60,6 +62,8 @@ Load all items from `[Scout]` lists to build a set of known URLs for deduplicati
 Run `npx @flippyhead/workflow-analyzer@latest scan-deps --since ${DAYS} --output /tmp/workflow-analyzer-deps.json`. Read the output JSON.
 
 If the command fails or is not available, log a warning and skip to Step 3 — dependency scanning is additive, not required.
+
+If `GITHUB_TOKEN` is not set in the environment and the scan-deps output shows `rateLimited > 0`, print: "GitHub API rate limited — scanned [reposResolved] of [packageCount] dependencies. Set GITHUB_TOKEN for full scanning."
 
 For each entry in the `releases` array:
 1. Read the `release.body` (release notes) and `repoDescription` to assess relevance
@@ -73,6 +77,8 @@ For each entry in the `releases` array:
 Skip this step if `--sources manual` was specified.
 
 Limit to **10-15 items per source**. If a source fails (timeout, rate limit, format change), log a warning and continue to the next source — never fail the entire run.
+
+When a source fails, print a clear one-line message: "Source [name] unavailable: [reason]. Continuing with remaining sources."
 
 **Anthropic changelog/blog:**
 Use `WebFetch` on `https://docs.anthropic.com/en/docs/about-claude/models` and `https://www.anthropic.com/news` to find recent releases and feature announcements. Extract title, URL, and a one-line description for each.
@@ -101,16 +107,18 @@ Extract video title, URL, and channel name.
 
 For each result across all sources: skip if the URL already exists in the catalogue (deduplication).
 
+Also deduplicate across sources within this run — if the same URL was found by both HN and GitHub in this run, only catalogue it once.
+
 ### Step 4: Process Inbox Items
 
 Skip this step if `--sources feeds` was specified.
 
-**Brain mode:** Call `get_list` for the `[Scout] Inbox` list. For each item with status "open":
+**Brain mode:** Call `get_list` for the `[Radar] Inbox` list. For each item with status "open":
 
 1. If the item has a URL, use `WebFetch` to get the page content
 2. Summarize what it is and why it might be useful (1-2 sentences) — set as `description`
 3. Classify it (see Step 5 for category/tag schema)
-4. Create a new item in the appropriate `[Scout]` category list using `create_list_item` with the enriched fields
+4. Create a new item in the appropriate `[Radar]` category list using `create_list_item` with the enriched fields
 5. Mark the inbox item as "done" using `update_list_item`
 
 **Local mode:** Process items in the Inbox array, move to the appropriate category array.
@@ -150,4 +158,4 @@ Output a brief summary:
 - How many inbox items were processed
 - How many duplicates were skipped
 - The 3-5 most notable new finds (title + one-line description)
-- Total catalogue size across all `[Scout]` lists
+- Total catalogue size across all `[Radar]` lists

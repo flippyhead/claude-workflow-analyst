@@ -1,11 +1,11 @@
 {
-  "name": "claude-workflow-analyst",
-  "description": "AI Brain toolkit and workflow analysis for Claude Code and Cowork",
-  "version": "2.3.1",
+  "name": "radar",
+  "description": "Your AI development radar — workflow intelligence and persistent memory for Claude Code and Cowork",
+  "version": "3.0.0",
   "author": {
     "name": "Peter Brown",
     "url": "https://ptb.io"
   },
-  "repository": "https://github.com/flippyhead/claude-workflow-analyst",
+  "repository": "https://github.com/flippyhead/radar",
   "license": "MIT"
 }

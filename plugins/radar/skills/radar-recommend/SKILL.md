@@ -1,10 +1,10 @@
 ---
-name: discover
+name: radar-recommend
 description: Match catalogued AI tools and techniques against your goals and usage patterns. Surfaces personalized recommendations.
 argument-hint: [--days N] [--focus <category>]
 ---
 
-# Discover — Personalized AI Recommendations
+# Radar Recommend — Personalized AI Recommendations
 
 Match the scout catalogue against your personal context — goals, usage patterns, current projects, and installed tools — to surface what you should be paying attention to.
 
@@ -20,11 +20,13 @@ Parse from `$ARGUMENTS` if provided.
 
 ### Step 1: Load the Catalogue
 
-**Brain mode:** Call `get_lists` and find all lists with names starting with `[Scout]` (excluding `[Scout] Inbox`). For each, call `get_list` and collect all items with status "open".
+**Brain mode:** Call `get_lists` and find all lists with names starting with `[Radar]` (excluding `[Radar] Inbox`). For each, call `get_list` and collect all items with status "open".
 
-**Local mode:** Read `~/.claude/scout-catalogue.json` and collect all items with status "open" across all lists (excluding Inbox).
+**Local mode:** Read `~/.claude/radar-catalogue.json` and collect all items with status "open" across all lists (excluding Inbox).
 
-If the catalogue is empty, tell the user: "No catalogue entries found. Run `/scout` first to build your discovery catalogue."
+If the catalogue is empty, tell the user: "No catalogue entries found. Run `/radar-scan` first to build your discovery catalogue."
+
+If the catalogue file exists but cannot be parsed (corrupt JSON), print: "Catalogue file at [path] is corrupt. Delete it and re-run `/radar-scan` to rebuild."
 
 If `--focus` was specified, filter items to only those with matching `properties.category`.
 
@@ -108,7 +110,7 @@ Limit output to:
 - Worth Exploring: up to 5 items
 - On Your Radar: up to 5 items
 
-If no items score above 3, report: "Nothing in the current catalogue connects strongly to your goals and usage patterns. The catalogue may need more entries — try running `/scout` or adding items to `[Scout] Inbox`."
+If no items score above 3, report: "Nothing in the current catalogue connects strongly to your goals and usage patterns. The catalogue may need more entries — try running `/radar-scan` or adding items to `[Radar] Inbox`."
 
 ### Step 5: Publish as Insights
 
@@ -128,6 +130,8 @@ Call `create_report` with:
 
 Only publish items scoring 5+ (Act Now and Worth Exploring tiers). On Your Radar items are too low-signal for the insights UI — just mention them in the terminal summary.
 
+**Terminal-only mode:** If brain MCP tools are unavailable, skip publishing. The terminal output from Step 4 is the primary output. Do not warn about brain being unavailable.
+
 ### Step 6: Update Catalogue State
 
 For each item that was recommended, update its properties to include:
@@ -145,4 +149,5 @@ Items with `lastRecommended` within the last 14 days should be deprioritized (re
 Output a brief terminal summary:
 - How many insights were published to the brain
 - The top 2-3 "Act Now" recommendations (one line each)
-- Direct the user to /insights in the AI Brain web UI to review and provide feedback
+- If brain is connected: "Recommendations also saved to your brain. Review at /insights in the AI Brain web UI."
+- If terminal-only: no brain reference in the output

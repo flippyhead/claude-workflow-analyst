@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_DIR}/hooks/check-brain-status.mjs\"",
-            "timeout": 10000
+            "command": "node \"${PLUGIN_DIR}/hooks/first-run.mjs\"",
+            "timeout": 5000
           }
         ]
       }
