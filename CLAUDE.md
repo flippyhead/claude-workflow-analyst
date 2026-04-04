@@ -17,7 +17,9 @@ plugins/
   radar/                 — workflow intelligence plugin
     .claude-plugin/      — per-plugin plugin.json
     .mcp.json            — MCP server config (ai-brain HTTP connector, optional)
-    hooks/               — hooks.json + first-run.mjs (SessionStart hook)
+    bin/
+      workflow-analyzer/ — bundled CLI (source + compiled dist)
+    hooks/               — hooks.json + first-run.mjs + install.mjs
     skills/
       radar/SKILL.md             — combined scan + recommend
       radar-analyze/SKILL.md     — session analysis
@@ -64,7 +66,7 @@ Bump rules:
 
 **MCP config** (`.mcp.json`) declares the Open Brain HTTP MCP server. Both plugins declare the same server URL (`https://ai-brain-pi.vercel.app/api/mcp`). Radar tolerates connection failure (terminal-only mode). Open Brain requires it.
 
-**External dependency**: Radar skills shell out to `npx @flippyhead/workflow-analyzer@latest` for session parsing, insight publishing, and dependency scanning. This is a separate npm package.
+**Bundled tooling**: The workflow-analyzer CLI is bundled under `plugins/radar/bin/workflow-analyzer/`. Skills invoke it via `node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js"`. Dependencies are installed by the PluginInstall hook. The tool is also published as `@flippyhead/workflow-analyzer` on npm (legacy distribution).
 
 ## Plugin Install Commands
 
