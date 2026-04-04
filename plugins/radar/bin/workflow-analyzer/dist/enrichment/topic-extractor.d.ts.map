@@ -1,0 +1,1 @@
+{"version":3,"file":"topic-extractor.d.ts","sourceRoot":"","sources":["../../src/enrichment/topic-extractor.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,aAAa,EAAE,MAAM,qBAAqB,CAAC;AAEpD,MAAM,WAAW,WAAW;IAC1B,KAAK,EAAE,MAAM,CAAC;IACd,QAAQ,EAAE,MAAM,CAAC;IACjB,UAAU,EAAE,MAAM,CAAC;CACpB;AA0DD,wBAAgB,YAAY,CAAC,OAAO,EAAE,aAAa,GAAG,WAAW,CAwDhE"}

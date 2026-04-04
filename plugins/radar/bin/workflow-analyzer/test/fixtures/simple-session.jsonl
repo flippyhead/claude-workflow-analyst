@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":"Please read the README file"},"uuid":"msg-1","parentUuid":null,"timestamp":"2026-03-15T10:00:00.000Z","sessionId":"test-session-1","version":"2.1.74","cwd":"/Users/test/project-a"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tool-1","name":"Read","input":{"file_path":"/Users/test/project-a/README.md"}}]},"uuid":"msg-2","parentUuid":"msg-1"}
+{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-1","content":"# Project A\nA test project."}]},"uuid":"msg-3","parentUuid":"msg-2"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The README contains the project description."}]},"uuid":"msg-4","parentUuid":"msg-3","timestamp":"2026-03-15T10:01:00.000Z"}

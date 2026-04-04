@@ -1,0 +1,8 @@
+{"type":"user","message":{"role":"user","content":"Edit the config file"},"uuid":"err-1","parentUuid":null,"timestamp":"2026-03-15T11:00:00.000Z","sessionId":"test-session-2","version":"2.1.74","cwd":"/Users/test/project-b"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tool-err-1","name":"Edit","input":{"file_path":"config.json","old_string":"foo","new_string":"bar"}}]},"uuid":"err-2","parentUuid":"err-1"}
+{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-err-1","content":"Error: old_string not found in file","is_error":true}]},"uuid":"err-3","parentUuid":"err-2"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tool-err-2","name":"Edit","input":{"file_path":"config.json","old_string":"\"foo\"","new_string":"\"bar\""}}]},"uuid":"err-4","parentUuid":"err-3"}
+{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-err-2","content":"Error: old_string not found in file","is_error":true}]},"uuid":"err-5","parentUuid":"err-4"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tool-err-3","name":"Write","input":{"file_path":"secret.env","content":"API_KEY=123"}}]},"uuid":"err-6","parentUuid":"err-5"}
+{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-err-3","content":"User denied tool call"}]},"uuid":"err-7","parentUuid":"err-6"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I was unable to complete the edit."}]},"uuid":"err-8","parentUuid":"err-7","timestamp":"2026-03-15T11:02:00.000Z"}

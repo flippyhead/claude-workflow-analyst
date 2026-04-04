@@ -1,0 +1,33 @@
+sources:
+  claude-code:
+    enabled: true
+    path: "~/.claude/projects"
+  cowork:
+    enabled: true
+    path: "~/.cowork/sessions"
+
+analyzers:
+  root-cause: true
+  direct-automation: true
+  decision-support: true
+  knowledge-nudges: true
+
+outputs:
+  markdown:
+    enabled: true
+    path: "~/.workflow-analyzer/reports"
+  ai-brain:
+    enabled: false
+    endpoint: "http://localhost:3577"
+
+llm:
+  provider: "claude-code-runtime"
+  model: "claude-sonnet-4-20250514"
+
+privacy:
+  level: "local-only"
+
+analysis:
+  lookbackDays: 7
+  maxInsightsPerModule: 5
+  confidenceThreshold: 0.6
