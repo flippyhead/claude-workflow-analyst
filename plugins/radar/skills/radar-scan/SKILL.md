@@ -59,7 +59,7 @@ Load all items from `[Radar]` lists to build a set of known URLs for deduplicati
 
 ### Step 2.5: Scan Project Dependencies
 
-Run `npx @flippyhead/workflow-analyzer@latest scan-deps --since ${DAYS} --output /tmp/workflow-analyzer-deps.json`. Read the output JSON.
+Run `node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" scan-deps --since ${DAYS} --output /tmp/workflow-analyzer-deps.json`. Read the output JSON. If the bundled binary is not available, fall back to `npx @flippyhead/workflow-analyzer@latest scan-deps --since ${DAYS} --output /tmp/workflow-analyzer-deps.json`.
 
 If the command fails or is not available, log a warning and skip to Step 3 — dependency scanning is additive, not required.
 

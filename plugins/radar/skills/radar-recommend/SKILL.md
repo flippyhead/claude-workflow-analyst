@@ -41,7 +41,9 @@ Call `get_lists` with `pinned: true` to get the user's stated goals and prioriti
 Call `browse_recent` with a generous `limit` (e.g., 50) to get recent thoughts. Note: `browse_recent` does not support date filtering — it returns the N most recent thoughts regardless of date. Filter results client-side by checking each thought's creation date, keeping only those from the last 14 days. Note recurring topics and themes.
 
 **Session history:**
-Run: `npx @flippyhead/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/discover-sessions.json`
+Run: `node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" parse --since ${DAYS} --output /tmp/discover-sessions.json`
+
+If the bundled binary is not available, fall back to `npx @flippyhead/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/discover-sessions.json`.
 
 Read the output file. If session history exceeds 50 sessions, summarize the top patterns:
 - Most-used tools (top 10)

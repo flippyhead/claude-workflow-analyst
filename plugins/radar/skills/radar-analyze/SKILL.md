@@ -8,7 +8,7 @@ argument-hint: [--days N]
 
 Analyze recent Claude Code and Cowork sessions to generate actionable workflow insights.
 
-Uses the `@flippyhead/workflow-analyzer` npm package for session parsing and enrichment. Claude does the reasoning.
+Uses the bundled workflow-analyzer for session parsing and enrichment. Claude does the reasoning.
 
 ## Arguments
 
@@ -24,7 +24,11 @@ Parse the days value from `$ARGUMENTS` if provided. Default to 7.
 Run the workflow-analyzer CLI to parse and enrich sessions from all configured sources (Claude Code + Cowork):
 
 ```bash
-npx @flippyhead/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/workflow-analyzer-parsed.json
+# Bundled binary (preferred)
+node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" parse --since ${DAYS} --output /tmp/workflow-analyzer-parsed.json
+
+# Fallback if bin/ not available:
+# npx @flippyhead/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/workflow-analyzer-parsed.json
 ```
 
 If the `npx` command fails, surface the error output directly to the user. Do not swallow the error or exit silently.
@@ -123,7 +127,11 @@ Aim for 5-10 total insights. Prioritize high-impact/low-effort actions. Skip ins
 Write insights to a temp file and use the CLI to publish:
 
 ```bash
-npx @flippyhead/workflow-analyzer@latest publish --insights /tmp/workflow-analyzer-insights.json
+# Bundled binary (preferred)
+node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" publish --insights /tmp/workflow-analyzer-insights.json
+
+# Fallback if bin/ not available:
+# npx @flippyhead/workflow-analyzer@latest publish --insights /tmp/workflow-analyzer-insights.json
 ```
 
 The insights JSON file should contain:
