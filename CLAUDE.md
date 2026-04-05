@@ -19,7 +19,7 @@ plugins/
     .mcp.json            — MCP server config (ai-brain HTTP connector, optional)
     bin/
       workflow-analyzer/ — bundled CLI (source + compiled dist)
-    hooks/               — hooks.json + first-run.mjs + install.mjs
+    hooks/               — hooks.json + install.mjs + first-run.mjs
     skills/
       radar/SKILL.md             — combined scan + recommend
       radar-analyze/SKILL.md     — session analysis
