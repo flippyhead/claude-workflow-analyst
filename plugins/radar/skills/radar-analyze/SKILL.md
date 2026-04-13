@@ -31,7 +31,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" parse --since ${D
 # npx @flippyhead/workflow-analyzer@latest parse --since ${DAYS} --output /tmp/workflow-analyzer-parsed.json
 ```
 
-If the `npx` command fails, surface the error output directly to the user. Do not swallow the error or exit silently.
+If the command fails, surface the error output directly to the user. Do not swallow the error or exit silently.
 
 Read the output file. It contains `{ sessions: [...], sessionGroups: [...] }`.
 
@@ -41,19 +41,17 @@ Otherwise, note the summary: how many sessions, which sources (claude-code, cowo
 
 ### Step 2: Check Previous Insights
 
-Use the `get_insights` MCP tool to check for existing insights:
+Read `~/.claude/radar/catalogue.json` and look at the `insights` array. Note:
+- Insights with `status: "new"` — unresolved insights to avoid duplicating
+- Insights with `status: "dismissed"` — things the user doesn't want to see again
 
-1. Call `get_insights` with `status: "new"` — unresolved insights
-2. Call `get_insights` with `status: "noted"` — acknowledged but not acted on
-3. Call `get_insights` with `status: "dismissed"` — things the user doesn't want to see again
+Build a set of existing insight IDs and observation text to use for deduplication. If the catalogue doesn't exist, skip this step.
 
-Note which deduplication keys and categories to avoid repeating. If the MCP tool is unavailable, skip this step.
+### Step 3: Check for User Goals
 
-### Step 3: Fetch User Goals
+Read `~/.claude/CLAUDE.md` if it exists. Look for stated goals, priorities, or focus areas. These are used by the Decision Support analysis below.
 
-Call `get_lists` with `pinned: true` to load the user's current priorities and goals. These are used by the Decision Support analysis below.
-
-If unavailable, skip goal-based analysis.
+If no goals are found, skip goal-based analysis.
 
 ### Step 4: Analyze
 
@@ -77,7 +75,7 @@ Look for patterns that could be automated:
 
 **Module C — Decision Support:**
 
-Using the session groups and the user's pinned goals from Step 3:
+Using the session groups and any user goals from Step 3:
 - Calculate time allocation by project/topic (sessions and minutes)
 - Compare against stated goals — flag misalignments
 - Note cross-platform patterns (e.g., "researched X in Cowork but never implemented in Claude Code")
@@ -115,23 +113,19 @@ For each insight, produce:
 Action types:
 - `install`: `{ type: "install", artifact: "filename", content: "file content to install" }`
 - `run`: `{ type: "run", command: "command to run", explanation: "why" }`
-- `save`: `{ type: "save", content: "what to save", destination: "AI Brain / CLAUDE.md / etc" }`
+- `save`: `{ type: "save", content: "what to save", destination: "CLAUDE.md or project memory" }`
 - `review`: `{ type: "review", summary: "what to look at", links: [] }`
 - `decide`: `{ type: "decide", question: "decision to make", options: ["option 1", "option 2"] }`
 - `acknowledge`: `{ type: "acknowledge", message: "FYI only, no action needed" }`
 
-Aim for 5-10 total insights. Prioritize high-impact/low-effort actions. Skip insights that match dismissed deduplication keys from Step 2.
+Aim for 5-10 total insights. Prioritize high-impact/low-effort actions. Skip insights that duplicate existing insights from Step 2.
 
-### Step 5: Publish
+### Step 5: Save Insights
 
-Write insights to a temp file and use the CLI to publish:
+1. Write insights to a temp file and use the CLI to publish as a markdown report:
 
 ```bash
-# Bundled binary (preferred)
 node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" publish --insights /tmp/workflow-analyzer-insights.json
-
-# Fallback if bin/ not available:
-# npx @flippyhead/workflow-analyzer@latest publish --insights /tmp/workflow-analyzer-insights.json
 ```
 
 The insights JSON file should contain:
@@ -147,9 +141,22 @@ The insights JSON file should contain:
 }
 ```
 
-Write this file before running the publish command. If publish fails, fall back to saving insights via `create_report` or `capture_thought` MCP tools.
+Write this file before running the publish command.
 
-If no brain MCP tools are available, skip publishing entirely — the terminal output from Step 6 is the primary output in terminal-only mode.
+2. Append insights to `~/.claude/radar/catalogue.json`'s `insights` array, converting to the catalogue insight schema:
+
+```json
+{
+  "id": "analyze-<deduplicationKey>",
+  "type": "pattern",
+  "observation": "<insight.observation>",
+  "recommendation": "<describe the action>",
+  "evidence": ["<insight.evidence metrics>"],
+  "relatedItems": [],
+  "createdAt": "<ISO date>",
+  "status": "new"
+}
+```
 
 ### Step 6: Summary
 
@@ -157,5 +164,3 @@ Output a brief summary:
 - How many insights were generated, by module
 - The report period and session count (including Cowork if any)
 - Top 2-3 "quick win" recommendations (highest impact, lowest effort)
-- If brain is connected: "Insights also saved to your brain. Review at /insights in the AI Brain web UI."
-- If terminal-only: no brain reference in the output
