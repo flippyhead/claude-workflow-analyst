@@ -125,7 +125,11 @@ Aim for 5-10 total insights. Prioritize high-impact/low-effort actions. Skip ins
 1. Write insights to a temp file and use the CLI to publish as a markdown report:
 
 ```bash
+# Bundled binary (preferred)
 node "${CLAUDE_PLUGIN_ROOT}/bin/workflow-analyzer/dist/cli.js" publish --insights /tmp/workflow-analyzer-insights.json
+
+# Fallback if bin/ not available:
+# npx @flippyhead/workflow-analyzer@latest publish --insights /tmp/workflow-analyzer-insights.json
 ```
 
 The insights JSON file should contain:
