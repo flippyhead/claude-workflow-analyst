@@ -143,7 +143,7 @@ The insights JSON file should contain:
 
 Write this file before running the publish command.
 
-2. Append insights to `~/.claude/radar/catalogue.json`'s `insights` array, converting to the catalogue insight schema:
+2. Append insights to `~/.claude/radar/catalogue.json`'s `insights` array. If the file or `~/.claude/radar/` directory doesn't exist, create them first with the empty catalogue structure: `{ "version": "1.0", "updatedAt": null, "items": [], "insights": [] }`. Convert each insight to the catalogue insight schema:
 
 ```json
 {

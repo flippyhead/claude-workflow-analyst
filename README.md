@@ -46,7 +46,7 @@ From `claude-workflow-analyst`:
 /plugin marketplace add flippyhead/radar
 ```
 
-Radar automatically migrates your existing catalogue on first run.
+Radar migrates your existing catalogue when you first run `/radar-scan` or `/radar`.
 
 ## License
 

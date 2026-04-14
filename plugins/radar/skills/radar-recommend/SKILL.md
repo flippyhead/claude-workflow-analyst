@@ -20,7 +20,7 @@ Parse from `$ARGUMENTS` if provided.
 
 ### Step 1: Load the Catalogue
 
-Read `~/.claude/radar/catalogue.json` and collect all items with status `"new"` or `"reviewed"` (skip dismissed and acted-on).
+Read `~/.claude/radar/catalogue.json` and collect all items with status `"new"`, `"reviewed"`, or `"starred"` (skip dismissed and acted-on).
 
 If the file doesn't exist or is empty, tell the user: "No catalogue entries found. Run `/radar-scan` first to build your discovery catalogue."
 
