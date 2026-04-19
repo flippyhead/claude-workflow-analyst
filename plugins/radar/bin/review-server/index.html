@@ -358,11 +358,11 @@ function renderCard(item) {
   const scoreClass = sc == null ? 's-none' : sc >= 7 ? 's-high' : sc >= 5 ? 's-mid' : 's-low';
   const scoreText = sc == null ? '—' : sc;
   const resolved = ['dismissed', 'acted-on'].includes(item.status);
-  const cls = resolved ? 'card resolved' : 'card';
 
   const tags = (item.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
   const safeUrl = isSafeUrl(item.url) ? item.url : '#';
   const urlLabel = escapeHtml((item.url || '').replace(/^https?:\/\//, ''));
+  const itemId = escapeHtml(item.id);
   const br = item.scoreBreakdown;
   const breakdown = br ? `
     <details class="extra">
@@ -387,7 +387,7 @@ function renderCard(item) {
   const notePanel = state.noteOpen.has(item.id) ? renderNotePanel(item) : '';
 
   return `
-    <div class="card ${resolved?'resolved':''}" data-id="${item.id}">
+    <div class="card ${resolved?'resolved':''}" data-id="${itemId}">
       <div class="row title-row">
         <div class="score ${scoreClass}">${scoreText}</div>
         <div class="title">${escapeHtml(item.title)}</div>
@@ -406,11 +406,11 @@ function renderCard(item) {
       ${breakdown}
       ${notes}
       <div class="actions">
-        <button class="btn star ${item.status==='starred'?'active':''}" onclick="setStatus('${item.id}','starred')">★ Star</button>
-        <button class="btn reviewed ${item.status==='reviewed'?'active':''}" onclick="setStatus('${item.id}','reviewed')">Reviewed</button>
-        <button class="btn acted ${item.status==='acted-on'?'active':''}" onclick="setStatus('${item.id}','acted-on')">Acted on</button>
-        <button class="btn" onclick="toggleNote('${item.id}')">Note</button>
-        <button class="btn danger" onclick="toggleDismiss('${item.id}')">Dismiss</button>
+        <button class="btn star ${item.status==='starred'?'active':''}" data-action="status" data-status="starred">★ Star</button>
+        <button class="btn reviewed ${item.status==='reviewed'?'active':''}" data-action="status" data-status="reviewed">Reviewed</button>
+        <button class="btn acted ${item.status==='acted-on'?'active':''}" data-action="status" data-status="acted-on">Acted on</button>
+        <button class="btn" data-action="toggle-note">Note</button>
+        <button class="btn danger" data-action="toggle-dismiss">Dismiss</button>
       </div>
       ${notePanel}
       ${dismissPanel}
@@ -429,10 +429,10 @@ function renderDismissPanel(item) {
   return `
     <div class="dismiss-panel">
       <div class="dismiss-tags">
-        ${tags.map(([v,l]) => `<span class="dismiss-tag ${sel.tag===v?'selected':''}" onclick="selectDismiss('${item.id}','${v}')">${l}</span>`).join('')}
+        ${tags.map(([v,l]) => `<span class="dismiss-tag ${sel.tag===v?'selected':''}" data-action="select-dismiss" data-tag="${escapeHtml(v)}">${escapeHtml(l)}</span>`).join('')}
       </div>
-      <input type="text" placeholder="Optional note — why dismiss?" value="${escapeHtml(sel.text||'')}" oninput="updateDismissText('${item.id}', this.value)">
-      <button class="confirm" ${!sel.tag?'disabled':''} onclick="confirmDismiss('${item.id}')">Dismiss</button>
+      <input type="text" placeholder="Optional note — why dismiss?" value="${escapeHtml(sel.text||'')}" data-input="dismiss-text">
+      <button class="confirm" ${!sel.tag?'disabled':''} data-action="confirm-dismiss">Dismiss</button>
     </div>`;
 }
 
@@ -440,8 +440,8 @@ function renderNotePanel(item) {
   const v = (state.dismissSelections[item.id+':note'] || {}).text || '';
   return `
     <div class="note-panel">
-      <textarea placeholder="Add a note..." oninput="updateNoteText('${item.id}', this.value)">${escapeHtml(v)}</textarea>
-      <button class="btn" onclick="addNote('${item.id}')">Save note</button>
+      <textarea placeholder="Add a note..." data-input="note-text">${escapeHtml(v)}</textarea>
+      <button class="btn" data-action="add-note">Save note</button>
     </div>`;
 }
 
@@ -508,6 +508,33 @@ function isSafeUrl(u) {
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch { return false; }
 }
+
+// Event delegation — one click/input listener on #main, dispatch by data-action / data-input.
+// Avoids inline onclick handlers that would interpolate item.id into JS string literals (XSS risk).
+document.getElementById('main').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const card = el.closest('[data-id]');
+  const id = card && card.dataset.id;
+  if (!id) return;
+  const action = el.dataset.action;
+  if (action === 'status')            setStatus(id, el.dataset.status);
+  else if (action === 'toggle-note')     toggleNote(id);
+  else if (action === 'toggle-dismiss')  toggleDismiss(id);
+  else if (action === 'select-dismiss')  selectDismiss(id, el.dataset.tag);
+  else if (action === 'confirm-dismiss') confirmDismiss(id);
+  else if (action === 'add-note')        addNote(id);
+});
+document.getElementById('main').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-input]');
+  if (!el) return;
+  const card = el.closest('[data-id]');
+  const id = card && card.dataset.id;
+  if (!id) return;
+  const field = el.dataset.input;
+  if (field === 'dismiss-text')   updateDismissText(id, el.value);
+  else if (field === 'note-text') updateNoteText(id, el.value);
+});
 
 document.getElementById('doneBtn').onclick = finishSession;
 loadCatalogue();
