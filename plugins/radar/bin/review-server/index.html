@@ -298,7 +298,7 @@ function relDate(iso) {
   if (!iso) return '';
   const t = new Date(iso);
   const days = Math.floor((Date.now() - t.getTime()) / 86400000);
-  if (days === 0) return 'today';
+  if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   if (days < 30) return days + 'd ago';
   return t.toLocaleDateString();
@@ -467,22 +467,22 @@ async function confirmDismiss(id) {
   const body = { status: 'dismissed' };
   const noteText = `[${sel.tag}] ${sel.text||''}`.trim();
   if (noteText) body.note = noteText;
-  delete state.dismissSelections[id];
-  state.dismissOpen.delete(id);
   try {
     await patchItem(id, body);
   } catch { return; }
+  delete state.dismissSelections[id];
+  state.dismissOpen.delete(id);
   render();
 }
 async function addNote(id) {
   const sel = state.dismissSelections[id+':note'];
   if (!sel || !sel.text) return;
   const text = sel.text;
-  delete state.dismissSelections[id+':note'];
-  state.noteOpen.delete(id);
   try {
     await patchItem(id, { note: text });
   } catch { return; }
+  delete state.dismissSelections[id+':note'];
+  state.noteOpen.delete(id);
   render();
 }
 
