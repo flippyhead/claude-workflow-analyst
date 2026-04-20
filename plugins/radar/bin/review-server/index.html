@@ -121,6 +121,19 @@
   .url-chip:hover { background: #e3f2fd; }
   .url-chip::after { content: "↗"; font-size: 10px; }
 
+  .insight {
+    margin: 8px 0 10px; padding: 8px 10px 8px 12px;
+    border-left: 3px solid #d6d3d1; background: #fafaf9; border-radius: 0 4px 4px 0;
+    font-size: 12.5px; line-height: 1.45;
+  }
+  .insight .line { margin: 2px 0; color: var(--text); }
+  .insight .line + .line { margin-top: 4px; }
+  .insight .label {
+    color: var(--muted); font-weight: 600; margin-right: 6px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .insight .prose { font-style: italic; color: #44403c; }
+
   .tags { display: flex; gap: 4px; flex-wrap: wrap; }
   .tag {
     padding: 1px 7px; border-radius: 3px; background: #f5f5f4;
@@ -237,6 +250,24 @@
 
 <script>
 let CATALOGUE = { version: "1.0", items: [], insights: [] };
+let INSIGHTS_BY_ITEM = {};
+
+function buildInsightIndex() {
+  INSIGHTS_BY_ITEM = {};
+  const raw = Array.isArray(CATALOGUE.insights) ? CATALOGUE.insights : [];
+  // Filter to well-formed objects before sorting so a null / non-object entry can't
+  // crash the comparator and leave the UI blank. The catalogue file can be corrupted
+  // or manually edited on disk.
+  const list = raw.filter(ins => ins && typeof ins === 'object');
+  // Latest wins: sort createdAt descending, set-if-absent keyed by relatedItems[0].
+  list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  for (const ins of list) {
+    const rel = Array.isArray(ins.relatedItems) ? ins.relatedItems[0] : null;
+    if (typeof rel !== 'string' || !rel || INSIGHTS_BY_ITEM[rel]) continue;
+    if (!ins.observation && !ins.recommendation) continue;
+    INSIGHTS_BY_ITEM[rel] = ins;
+  }
+}
 
 async function api(method, path, body) {
   const opts = { method, headers: { "content-type": "application/json" } };
@@ -259,6 +290,8 @@ function showError(msg) {
 
 async function loadCatalogue() {
   CATALOGUE = await api("GET", "/api/catalogue");
+  try { buildInsightIndex(); }
+  catch (e) { INSIGHTS_BY_ITEM = {}; showError('Insight index failed — cards will render without commentary'); console.error(e); }
   render();
 }
 
@@ -380,6 +413,13 @@ function renderCard(item) {
       </div>
     </details>` : '';
 
+  const insight = INSIGHTS_BY_ITEM[item.id];
+  const insightBlock = (insight && (insight.observation || insight.recommendation)) ? `
+    <div class="insight">
+      ${insight.observation ? `<div class="line"><span class="label">Why</span><span class="prose">${escapeHtml(insight.observation)}</span></div>` : ''}
+      ${insight.recommendation ? `<div class="line"><span class="label">Try</span><span class="prose">${escapeHtml(insight.recommendation)}</span></div>` : ''}
+    </div>` : '';
+
   const dismissPanel = state.dismissOpen.has(item.id) ? renderDismissPanel(item) : '';
   const notePanel = state.noteOpen.has(item.id) ? renderNotePanel(item) : '';
 
@@ -396,6 +436,7 @@ function renderCard(item) {
         ${item.status !== 'new' ? `<span class="tag">${escapeHtml(item.status)}</span>` : ''}
       </div>
       <div class="desc">${escapeHtml(item.description || '(no description)')}</div>
+      ${insightBlock}
       <div class="meta-row">
         <a class="url-chip" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${urlLabel}</a>
         <div class="tags">${tags}</div>

@@ -51,35 +51,73 @@ Read the output file. If session history exceeds 50 sessions, summarize the top 
 **User instructions (lightweight):**
 - Read `~/.claude/CLAUDE.md` if it exists — look for stated goals, priorities, or focus areas the user has written down. Do not prompt the user to add goals if none are found — just proceed without goal-based scoring.
 
-### Step 3: Match and Rank
+### Step 3: Score Each Item (dispatch to Haiku subagents)
 
-For each catalogue item, evaluate against the loaded context. Score on four dimensions:
+Build one shared **context payload** from Step 2 (session patterns, installed MCPs/plugins, CLAUDE.md goals). Keep it compact — aim for under ~1KB of plain text so it caches well across subagent calls. Assemble it once, reuse it for every item.
 
-**Goal alignment (0-3):**
-- 3: Directly addresses a stated goal or priority found in CLAUDE.md
-- 2: Related to an active project's domain
-- 1: Tangentially useful based on session history
-- 0: No connection
+Then, for each catalogue item, dispatch a Haiku subagent to score it. Send multiple `Agent` tool calls in a single assistant turn so they run in parallel. Use:
 
-**Usage gap (0-3):**
-- 3: User is doing something manually that this automates (evidence in session data)
-- 2: User is using a tool that has a better/newer alternative
-- 1: User works in the relevant domain but hasn't needed this yet
-- 0: No gap identified
+```
+Agent({
+  subagent_type: "general-purpose",
+  model: "haiku",
+  description: "Score catalogue item",
+  prompt: <see template below>,
+})
+```
 
-**Recency (0-2):**
-- 2: Discovered in the last 7 days
-- 1: Discovered in the last 30 days, or newly relevant due to a recently started project
-- 0: Older
+**Note (to the session model constructing the prompt):** do NOT include `lastRecommended` in the `Item:` block below. The main loop applies the freshness penalty itself, and exposing `lastRecommended` to Haiku risks the weaker model double-counting it inside the `recency` rubric (which is about *discovery* date only).
 
-**Effort/impact (0-2):**
-- 2: Low effort, high impact (e.g., a config change or install command)
-- 1: Medium effort or medium impact
-- 0: High effort or low impact
+**Subagent prompt template:**
 
-**Total score: 0-10.** Skip items scoring below 3.
+> You are scoring one catalogue item against a user's context. Return a single JSON object with keys `goalAlignment`, `usageGap`, `recency`, `effort`, `observation`, `recommendation`. No prose around the JSON.
+>
+> **User context:**
+> ```
+> <context payload: stated goals, active projects, top tools from session history, installed MCP servers/plugins, recurring prompt themes>
+> ```
+>
+> **Item:**
+> - Title: `<title>`
+> - URL: `<url>`
+> - Category: `<category>`
+> - Description: `<description>`
+> - Tags: `<tags joined by comma>`
+> - Discovered: `<discoveredAt>` (today is `<today>`)
+>
+> **Rubric — return integers in the stated range:**
+>
+> - `goalAlignment` (0-3):
+>   - 3: directly addresses a stated goal or priority in user context
+>   - 2: related to an active project's domain
+>   - 1: tangentially useful based on session history
+>   - 0: no connection
+>
+> - `usageGap` (0-3):
+>   - 3: user is doing something manually that this automates (evidence in session data)
+>   - 2: user uses a tool that has a better/newer alternative here
+>   - 1: user works in the relevant domain but hasn't needed this yet
+>   - 0: no gap identified
+>
+> - `recency` (0-2):
+>   - 2: discovered in the last 7 days
+>   - 1: discovered in the last 30 days, or newly relevant due to a recently started project
+>   - 0: older
+>
+> - `effort` (0-2):
+>   - 2: low effort, high impact (config change or install command)
+>   - 1: medium effort or medium impact
+>   - 0: high effort or low impact
+>
+> - `observation` (string, ≤ 160 chars): one sentence citing the specific usage pattern, goal, or environment detail from the user context that makes this item relevant. Be concrete — reference an actual tool, project, or pattern from the context. No generic filler.
+>
+> - `recommendation` (string, ≤ 160 chars): one sentence with a concrete next step (install command, a specific feature to try, a config change). No "consider exploring" — say the action.
+>
+> Respond with ONLY the JSON object.
 
-Items with `lastRecommended` within the last 14 days should be deprioritized (reduce score by 2) to avoid re-surfacing the same recommendations.
+**Once all subagents return,** the main loop computes `total = goalAlignment + usageGap + recency + effort`. If `lastRecommended` is within the last 14 days, subtract 2 from `total` (freshness penalty — do this in the main loop, not in the subagent). Skip items whose final `total < 3`.
+
+**If a subagent response is malformed** (unparseable JSON, scores out of range, missing fields), fall back to main-loop scoring for that item. Log a one-line warning: "Scoring fallback for <title>: <reason>".
 
 ### Step 4: Present Recommendations
 
@@ -113,20 +151,22 @@ If no items score above 3, report: "Nothing in the current catalogue connects st
 
 ### Step 5: Save Insights
 
-For items scoring 5+ (Act Now and Worth Exploring tiers), create insight entries and append to the catalogue's `insights` array:
+For items scoring 5+ (Act Now and Worth Exploring tiers), assemble one insight entry per item using the prose the scoring subagent already returned. No re-writing — the subagent's `observation` and `recommendation` go straight in. Append each to the catalogue's `insights` array:
 
 ```json
 {
   "id": "insight-<timestamp>-<index>",
   "type": "recommendation",
-  "observation": "what the data shows — cite the specific usage pattern or environment detail",
-  "recommendation": "the concrete action to take",
+  "observation": "<subagent observation>",
+  "recommendation": "<subagent recommendation>",
   "evidence": ["score breakdown: goal=N, gap=N, recency=N, effort=N, total=N"],
   "relatedItems": ["<item id>"],
   "createdAt": "<ISO date>",
   "status": "new"
 }
 ```
+
+**Note:** the `observation` and `recommendation` fields are the same strings the review UI renders inline on each card (via `insights[].relatedItems[0]` → item id lookup). Keep them grounded in the user's context, not generic.
 
 ### Step 6: Update Catalogue State
 

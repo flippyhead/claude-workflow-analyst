@@ -108,18 +108,58 @@ Look for items in the catalogue with `source: "manual"` and `status: "new"`. For
 4. Update category and tags on the existing item
 5. Set `status: "reviewed"` and `reviewedAt` to now
 
-### Step 5: Enrich and Tag
+### Step 5: Enrich and Tag (dispatch to Haiku subagents)
 
-For each new catalogue entry (from Step 2 or Step 3), create an item object:
+The main loop has now gathered a list of **candidates** — `{ title, url, source, discoveredAt, rawContext }` objects from Step 2 (dependency releases) and Step 3 (structured sources). Triage (deciding whether something is worth cataloguing at all) has already happened in those steps. The work remaining — picking a category, generating tags, and writing a 1-2 sentence description — is formulaic and per-item, so dispatch it to Haiku subagents.
+
+(Step 4 handles a different case: it processes *existing* manual inbox items already in the catalogue, updating them in place. Step 4 can use the same subagent pattern if desired — same prompt template, same return shape — but the main loop writes the result back onto the existing item rather than creating a new one.)
+
+**For each candidate, dispatch one subagent call.** Send multiple `Agent` tool calls in a single assistant turn so they run in parallel. Use:
+
+```
+Agent({
+  subagent_type: "general-purpose",
+  model: "haiku",
+  description: "Enrich catalogue item",
+  prompt: <see template below>,
+})
+```
+
+**Subagent prompt template:**
+
+> You are enriching one item for a discovery catalogue. Return a single JSON object with keys `category`, `tags`, `description`. No prose around the JSON.
+>
+> **Item:**
+> - Title: `<title>`
+> - URL: `<url>`
+> - Source: `<source>` (one of: anthropic, hackernews, github, youtube, manual, dependency)
+> - Raw context: `<release notes / HN snippet / repo description / fetched page text — whatever the main loop gathered>`
+>
+> **Rules:**
+> - `category` must be exactly one of: `claude-code`, `mcp`, `api`, `agent-sdk`, `prompting`, `tooling`, `workflow`, `general-ai`.
+>   - `claude-code` — Claude Code features, settings, shortcuts, plugins
+>   - `mcp` — MCP servers, protocols, integrations
+>   - `api` — Claude API features, SDK updates
+>   - `agent-sdk` — Agent building tools and frameworks
+>   - `prompting` — Prompting techniques, system prompts, skill design
+>   - `tooling` — Developer tools, CLI utilities, browser extensions
+>   - `workflow` — Workflow patterns, automation techniques, productivity methods
+>   - `general-ai` — Broader AI developments, models, research
+> - `tags` must be an array of 3-5 short free-text strings describing workflows or goals this helps with (e.g. `["debugging", "agent-loop", "ci-automation"]`).
+> - `description` must be 1-2 sentences summarizing what it is and why someone building with Claude Code might care. No hype, no marketing copy.
+>
+> Respond with ONLY the JSON object. Do not include any explanation before or after.
+
+**Once all subagents return,** the main loop assembles each final item with the canonical schema:
 
 ```json
 {
   "id": "<first 12 chars of SHA-256 hash of the URL>",
   "title": "...",
   "url": "...",
-  "description": "1-2 sentence summary",
-  "category": "<one of: claude-code, mcp, api, agent-sdk, prompting, tooling, workflow, general-ai>",
-  "tags": ["<free-text tags describing what workflows/goals this helps with>"],
+  "description": "<from subagent>",
+  "category": "<from subagent>",
+  "tags": ["<from subagent>"],
   "source": "<one of: anthropic, hackernews, github, youtube, manual, dependency>",
   "discoveredAt": "<ISO date>",
   "status": "new",
@@ -131,15 +171,7 @@ For each new catalogue entry (from Step 2 or Step 3), create an item object:
 }
 ```
 
-Choose category based on the content:
-- `claude-code` — Claude Code features, settings, shortcuts, plugins
-- `mcp` — MCP servers, protocols, integrations
-- `api` — Claude API features, SDK updates
-- `agent-sdk` — Agent building tools and frameworks
-- `prompting` — Prompting techniques, system prompts, skill design
-- `tooling` — Developer tools, CLI utilities, browser extensions
-- `workflow` — Workflow patterns, automation techniques, productivity methods
-- `general-ai` — Broader AI developments, models, research
+**If a subagent response is malformed** (not parseable JSON, `category` not in vocabulary, `tags` not an array), fall back to main-loop enrichment for that one item — do not drop it. Log a one-line warning: "Enrichment fallback for <title>: <reason>".
 
 Append each new item to the catalogue's `items` array. Update `updatedAt` to now. Write the catalogue back to `~/.claude/radar/catalogue.json`.
 
