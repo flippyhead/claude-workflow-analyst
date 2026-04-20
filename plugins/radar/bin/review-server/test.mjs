@@ -5,10 +5,9 @@
 import { spawn } from 'node:child_process';
 import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER = join(__dirname, 'server.mjs');
@@ -47,6 +46,10 @@ async function waitForUrl(proc) {
       const m = s.match(/RADAR_REVIEW_URL (http:\/\/\S+)/);
       if (m) { clearTimeout(t); resolve(m[1]); }
     });
+    proc.on('exit', (code) => {
+      clearTimeout(t);
+      reject(new Error(`server exited with code ${code} before printing URL`));
+    });
   });
 }
 
@@ -79,7 +82,8 @@ async function run() {
     const item1 = cat1.items.find((i) => i.id === 'test-item-1');
     assert.equal(item1.status, 'dismissed');
     assert.equal(item1.notes.length, 1);
-    assert.equal(typeof item1.notes[0].text, 'string');
+    assert.equal(item1.notes[0].text, '[not-relevant] legacy string note');
+    assert.equal(typeof item1.notes[0].at, 'string');
     console.log('OK: legacy string note accepted and stored');
 
     console.log('PASS');
