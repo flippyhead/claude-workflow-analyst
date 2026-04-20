@@ -10,7 +10,8 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CATALOGUE = join(homedir(), ".claude/radar/catalogue.json");
+const CATALOGUE = process.env.RADAR_CATALOGUE
+  || join(homedir(), ".claude/radar/catalogue.json");
 
 function loadCatalogue() {
   if (!existsSync(CATALOGUE)) {
