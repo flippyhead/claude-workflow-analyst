@@ -108,12 +108,12 @@ const server = createServer(async (req, res) => {
           const trimmed = patch.note.trim();
           const m = trimmed.match(/^\[([^\]]+)\]\s*(.*)$/);
           entry = m
-            ? { at: now, tag: m[1], text: m[2] }
+            ? { at: now, tag: m[1].trim(), text: m[2].trimEnd() }
             : { at: now, tag: null, text: trimmed };
-        } else if (typeof patch.note === "object" && typeof patch.note.tag === "string") {
+        } else if (typeof patch.note === "object" && typeof patch.note.tag === "string" && patch.note.tag.trim()) {
           entry = {
             at: now,
-            tag: patch.note.tag,
+            tag: patch.note.tag.trim(),
             text: typeof patch.note.text === "string" ? patch.note.text : "",
           };
         }

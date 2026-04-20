@@ -121,6 +121,7 @@ async function run() {
     assert.equal(item3.notes.length, 1, 'tag-only note still stored');
     assert.equal(item3.notes[0].tag, 'not-relevant');
     assert.equal(item3.notes[0].text, '');
+    console.log('OK: tag-only structured note stored');
 
     console.log('PASS');
   } finally {
