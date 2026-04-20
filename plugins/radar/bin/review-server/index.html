@@ -254,12 +254,16 @@ let INSIGHTS_BY_ITEM = {};
 
 function buildInsightIndex() {
   INSIGHTS_BY_ITEM = {};
-  const list = Array.isArray(CATALOGUE.insights) ? CATALOGUE.insights.slice() : [];
+  const raw = Array.isArray(CATALOGUE.insights) ? CATALOGUE.insights : [];
+  // Filter to well-formed objects before sorting so a null / non-object entry can't
+  // crash the comparator and leave the UI blank. The catalogue file can be corrupted
+  // or manually edited on disk.
+  const list = raw.filter(ins => ins && typeof ins === 'object');
   // Latest wins: sort createdAt descending, set-if-absent keyed by relatedItems[0].
-  list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   for (const ins of list) {
     const rel = Array.isArray(ins.relatedItems) ? ins.relatedItems[0] : null;
-    if (!rel || INSIGHTS_BY_ITEM[rel]) continue;
+    if (typeof rel !== 'string' || !rel || INSIGHTS_BY_ITEM[rel]) continue;
     if (!ins.observation && !ins.recommendation) continue;
     INSIGHTS_BY_ITEM[rel] = ins;
   }
@@ -286,7 +290,8 @@ function showError(msg) {
 
 async function loadCatalogue() {
   CATALOGUE = await api("GET", "/api/catalogue");
-  buildInsightIndex();
+  try { buildInsightIndex(); }
+  catch (e) { INSIGHTS_BY_ITEM = {}; showError('Insight index failed — cards will render without commentary'); console.error(e); }
   render();
 }
 

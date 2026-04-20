@@ -82,7 +82,8 @@ Agent({
 > - Description: `<description>`
 > - Tags: `<tags joined by comma>`
 > - Discovered: `<discoveredAt>` (today is `<today>`)
-> - Last recommended: `<lastRecommended or "never">`
+>
+> Do NOT pass `lastRecommended` to the subagent — the main loop applies the freshness penalty itself, and including it here risks the weaker model double-counting it inside the `recency` rubric (which is about *discovery* date only).
 >
 > **Rubric — return integers in the stated range:**
 >
