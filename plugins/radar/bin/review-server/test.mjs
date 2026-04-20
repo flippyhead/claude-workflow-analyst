@@ -3,7 +3,7 @@
 // Boots the server against a temp catalogue and exercises PATCH / GET.
 
 import { spawn } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import assert from 'node:assert/strict';
@@ -41,9 +41,10 @@ function makeCatalogue() {
 async function waitForUrl(proc) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server boot timeout')), 5000);
+    let buf = '';
     proc.stdout.on('data', (chunk) => {
-      const s = chunk.toString();
-      const m = s.match(/RADAR_REVIEW_URL (http:\/\/\S+)/);
+      buf += chunk.toString();
+      const m = buf.match(/RADAR_REVIEW_URL (http:\/\/\S+)/);
       if (m) { clearTimeout(t); resolve(m[1]); }
     });
     proc.on('exit', (code) => {
@@ -63,11 +64,16 @@ async function patch(url, id, body) {
 }
 
 async function run() {
+  // Point the server at a temp catalogue by overriding HOME so its
+  // homedir()-based fixed path resolves into the temp dir. This keeps the
+  // "catalogue lives at ~/.claude/radar/catalogue.json" invariant intact.
   const dir = mkdtempSync(join(tmpdir(), 'radar-review-test-'));
-  const catPath = join(dir, 'catalogue.json');
+  const catDir = join(dir, '.claude', 'radar');
+  const catPath = join(catDir, 'catalogue.json');
+  mkdirSync(catDir, { recursive: true });
   writeFileSync(catPath, JSON.stringify(makeCatalogue()));
 
-  const env = { ...process.env, RADAR_CATALOGUE: catPath, RADAR_PORT: '0' };
+  const env = { ...process.env, HOME: dir, RADAR_PORT: '0' };
   const proc = spawn('node', [SERVER], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   try {
     const url = await waitForUrl(proc);
@@ -151,6 +157,19 @@ async function run() {
     assert.equal(item5.status, 'dismissed', 'status still updates even when note dropped');
     assert.equal(item5.notes.length, 0, 'fully blank note not stored');
     console.log('OK: fully blank structured note dropped cleanly');
+
+    // TEST 6: whitespace-only text with empty tag is dropped (junk note guard)
+    it.status = 'new'; it.notes = []; it.reviewedAt = null;
+    writeFileSync(catPath, JSON.stringify(cat));
+    const r6 = await patch(url, 'test-item-1', {
+      status: 'dismissed',
+      note: { tag: '', text: '   ' },
+    });
+    assert.equal(r6.status, 200);
+    const cat6 = JSON.parse(readFileSync(catPath, 'utf8'));
+    const item6 = cat6.items.find((i) => i.id === 'test-item-1');
+    assert.equal(item6.notes.length, 0, 'whitespace-only note not stored');
+    console.log('OK: whitespace-only structured note dropped');
 
     console.log('PASS');
   } finally {

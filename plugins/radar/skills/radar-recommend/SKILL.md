@@ -140,7 +140,9 @@ Agent({
 
 **Malformed `negativePrior`:** if the subagent omits `negativePrior` or returns a positive number, treat it as 0 (neutral) and log a one-line warning. Do NOT fall back to main-loop scoring just for this — the other rubric values are still usable.
 
-**If a subagent response is malformed** (unparseable JSON, scores out of range, missing fields), fall back to main-loop scoring for that item. Log a one-line warning: "Scoring fallback for <title>: <reason>".
+**If a subagent response is malformed** (unparseable JSON, or any *required* field missing / out of range), fall back to main-loop scoring for that item. Log a one-line warning: "Scoring fallback for <title>: <reason>".
+
+**Required fields** for fallback purposes are: `goalAlignment`, `usageGap`, `recency`, `effort`, `observation`, `recommendation`. `negativePrior` is explicitly **optional** — its absence is handled by the paragraph above and does not trigger fallback.
 
 ### Step 4: Present Recommendations
 

@@ -10,8 +10,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CATALOGUE = process.env.RADAR_CATALOGUE
-  || join(homedir(), ".claude/radar/catalogue.json");
+const CATALOGUE = join(homedir(), ".claude/radar/catalogue.json");
 
 function loadCatalogue() {
   if (!existsSync(CATALOGUE)) {
@@ -112,8 +111,9 @@ const server = createServer(async (req, res) => {
             : { at: now, tag: null, text: trimmed };
         } else if (typeof patch.note === "object" && patch.note !== null) {
           const rawTag = typeof patch.note.tag === "string" ? patch.note.tag.trim() : "";
-          const rawText = typeof patch.note.text === "string" ? patch.note.text : "";
-          if (rawTag || rawText) {
+          // trimEnd matches the legacy regex path so identical content stores identically.
+          const rawText = typeof patch.note.text === "string" ? patch.note.text.trimEnd() : "";
+          if (rawTag || rawText.trim()) {
             entry = {
               at: now,
               tag: rawTag || null,

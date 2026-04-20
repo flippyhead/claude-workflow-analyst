@@ -403,6 +403,9 @@ function renderCard(item) {
   const urlLabel = escapeHtml((item.url || '').replace(/^https?:\/\//, ''));
   const itemId = escapeHtml(item.id);
   const br = item.scoreBreakdown;
+  const negPriorRow = (br && br.negativePrior != null && br.negativePrior !== 0)
+    ? `<div class="row"><span class="label">Dismissal penalty</span><span>${escapeHtml(br.negativePrior)}</span></div>`
+    : '';
   const breakdown = br ? `
     <details class="extra">
       <summary>Score breakdown (${escapeHtml(sc)}/10)</summary>
@@ -411,6 +414,7 @@ function renderCard(item) {
         <div class="row"><span class="label">Usage gap</span><span>${escapeHtml(br.usageGap)}/3</span></div>
         <div class="row"><span class="label">Recency</span><span>${escapeHtml(br.recency)}/2</span></div>
         <div class="row"><span class="label">Effort/impact</span><span>${escapeHtml(br.effort)}/2</span></div>
+        ${negPriorRow}
       </div>
     </details>` : '';
 
@@ -518,13 +522,18 @@ function updateNoteText(id, t)    { state.dismissSelections[id+':note'] = {text:
 async function confirmDismiss(id) {
   const sel = state.dismissSelections[id] || {};
   if (!sel.tag) return;
-  // No try/catch: on server error, api() already calls showError() and
-  // the throw short-circuits the delete/render below so the dismiss panel
-  // stays open with the user's selection intact for retry.
-  await patchItem(id, {
-    status: 'dismissed',
-    note: { tag: sel.tag, text: (sel.text || '').trim() },
-  });
+  try {
+    await patchItem(id, {
+      status: 'dismissed',
+      note: { tag: sel.tag, text: (sel.text || '').trim() },
+    });
+  } catch {
+    // patchItem's api() already surfaced the error via showError(). Return
+    // early so the dismiss panel stays open with the user's selection intact
+    // for retry — and so the rejection doesn't escape this async function
+    // and show up as an unhandled promise warning in the browser console.
+    return;
+  }
   delete state.dismissSelections[id];
   state.dismissOpen.delete(id);
   render();
