@@ -1,6 +1,6 @@
 ---
 name: radar-scan
-description: Scan external sources for AI tools, features, and techniques. Builds a discovery catalogue from dependency changelogs, HN, GitHub, YouTube, and your inbox.
+description: Scan external sources for AI tools, features, and techniques. Builds a discovery catalogue from dependency changelogs, HN (targeted + firehose), GitHub, YouTube, a people-to-watch list, and your inbox.
 argument-hint: [--sources <all|feeds|manual>] [--days N]
 ---
 
@@ -63,20 +63,46 @@ For each entry in the `releases` array:
 
 Skip this step if `--sources manual` was specified.
 
-Limit to **10-15 items per source**. If a source fails (timeout, rate limit, format change), log a warning and continue to the next source — never fail the entire run.
+Limit to **10-15 items per source after dedup/merge**, where "per source" means: across all Anthropic changelog/blog entries combined, across all HN targeted queries combined, across all firehose queries combined, across all GitHub queries combined, across all YouTube queries combined, and across the entire watchlist loop combined (not per handle). When trimming to the cap: for HN, keep highest points; for repos/gists, keep most recently updated; for YouTube and Anthropic, keep most recent.
+
+If a source fails (timeout, rate limit, format change), log a warning and continue to the next source — never fail the entire run.
 
 When a source fails, print a clear one-line message: "Source [name] unavailable: [reason]. Continuing with remaining sources."
 
 **Anthropic changelog/blog:**
 Use `WebFetch` on `https://docs.anthropic.com/en/docs/about-claude/models` and `https://www.anthropic.com/news` to find recent releases and feature announcements. Extract title, URL, and a one-line description for each.
 
-**Hacker News:**
-Use `WebFetch` on the Algolia API:
+**Hacker News — targeted queries (5+ points):**
+Use `WebFetch` on the Algolia API. Extract title, URL (use `url` field, fall back to HN comment URL), and points. Keep items with 5+ points.
 - `https://hn.algolia.com/api/v1/search_by_date?query=claude+code&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}`
 - `https://hn.algolia.com/api/v1/search_by_date?query=anthropic+mcp&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}`
 - `https://hn.algolia.com/api/v1/search_by_date?query=ai+agent+tool&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}`
+- `https://hn.algolia.com/api/v1/search_by_date?query=llm+technique&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}`
+- `https://hn.algolia.com/api/v1/search_by_date?query=prompt+engineering&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}`
+- `https://hn.algolia.com/api/v1/search_by_date?query=%22show+hn%22+llm&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}`
 
-Extract title, URL (use `url` field, fall back to HN comment URL), and points as a quality signal. Only keep items with 5+ points.
+**Hacker News — firehose (high-point floor):**
+Safety net for high-signal AI stories that don't match targeted queries (e.g. a viral LLM technique gist). Pull broad AI stories with a point floor of 100+:
+- `https://hn.algolia.com/api/v1/search_by_date?query=llm&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP},points>=100`
+- `https://hn.algolia.com/api/v1/search_by_date?query=ai&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP},points>=100`
+
+Apply the same extraction as the targeted queries. Deduplicate by URL against the targeted-query results within this run. **Dedup merge rule:** when the same URL surfaces from multiple paths (firehose + targeted, watchlist + HN, etc.), keep the first-seen `source` but append every additional discovery path to the item's `notes` array so provenance isn't lost (see watchlist note format below). Apply this same merge rule to cross-source dedup at the end of Step 3.
+
+**People to Watch:**
+High-signal voices in the LLM/agent space whose work often surfaces new patterns before broader discovery. Scan their recent output directly, independent of keyword queries.
+
+Load the watchlist:
+1. Check for `~/.claude/radar/watchlist.json`. If present, use its `handles` array.
+2. Otherwise use this seed list: `["karpathy", "simonw", "jxnl", "hwchase17", "anthropics"]`.
+
+For each handle:
+1. `WebFetch` `https://gist.github.com/{handle}` — parse the page for recently published gists (title + URL + date). Skip if older than `${DAYS}` days.
+2. `WebFetch` `https://github.com/{handle}?tab=repositories&sort=updated` — parse for repos updated within `${DAYS}` days.
+3. `WebFetch` `https://hn.algolia.com/api/v1/search_by_date?query={handle}&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}` — stories mentioning the handle (1+ point; known names are already high-signal).
+
+Items discovered this way carry the natural `source` of their origin URL (`github` for gists/repos, `hackernews` for HN stories). Record the discovery path by appending `{ "type": "watchlist", "handle": "{handle}", "at": "<ISO timestamp>" }` to the item's `notes` array. Do **not** inject watchlist provenance into `tags` — `tags` is reserved for the 3–5 workflow/goal descriptors produced by the enrichment subagent and is consumed by downstream scoring prompts (see `radar-recommend`).
+
+If a handle returns no recent activity or a fetch fails, log one line and continue — never fail the run.
 
 **GitHub:**
 Use `WebSearch` for:
@@ -110,7 +136,7 @@ Look for items in the catalogue with `source: "manual"` and `status: "new"`. For
 
 ### Step 5: Enrich and Tag (dispatch to Haiku subagents)
 
-The main loop has now gathered a list of **candidates** — `{ title, url, source, discoveredAt, rawContext }` objects from Step 2 (dependency releases) and Step 3 (structured sources). Triage (deciding whether something is worth cataloguing at all) has already happened in those steps. The work remaining — picking a category, generating tags, and writing a 1-2 sentence description — is formulaic and per-item, so dispatch it to Haiku subagents.
+The main loop has now gathered a list of **candidates** — `{ title, url, source, discoveredAt, rawContext, notes }` objects from Step 2 (dependency releases) and Step 3 (structured sources). The `notes` array carries any provenance accumulated during discovery (watchlist entries, dedup merge paths); it may be empty. Triage (deciding whether something is worth cataloguing at all) has already happened in those steps. The work remaining — picking a category, generating tags, and writing a 1-2 sentence description — is formulaic and per-item, so dispatch it to Haiku subagents.
 
 (Step 4 handles a different case: it processes *existing* manual inbox items already in the catalogue, updating them in place. Step 4 can use the same subagent pattern if desired — same prompt template, same return shape — but the main loop writes the result back onto the existing item rather than creating a new one.)
 
@@ -163,7 +189,7 @@ Agent({
   "source": "<one of: anthropic, hackernews, github, youtube, manual, dependency>",
   "discoveredAt": "<ISO date>",
   "status": "new",
-  "notes": [],
+  "notes": "<candidate.notes from Step 3 — provenance accumulated during discovery (watchlist entries, dedup merge paths), or [] if none>",
   "score": null,
   "scoreBreakdown": null,
   "reviewedAt": null,
