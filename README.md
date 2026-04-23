@@ -6,7 +6,7 @@ Your AI development radar for Claude Code.
 
 The AI tooling landscape changes every week. New Claude Code features ship, your dependencies release major versions, MCP servers multiply, and frameworks you depend on pivot — all while you're heads-down shipping.
 
-Radar watches the ecosystem for you. It scans your dependencies, Hacker News, GitHub, and the Anthropic changelog, then tells you what actually matters — based on your projects, your tools, and your goals.
+Radar watches the ecosystem for you, then tells you which of it matters **based on what you're actually doing** — your prompts, your tool calls, your failed commands, your active projects. Not a generic newsletter. Every recommendation is grounded in your own Claude Code and Cowork session history, parsed locally.
 
 ## Install
 
@@ -16,6 +16,20 @@ Radar watches the ecosystem for you. It scans your dependencies, Hacker News, Gi
 ```
 
 Works with Claude Code. Zero setup. All data stays local.
+
+## Personalized to Your Actual Work
+
+Most "ecosystem digest" tools show you the same news everyone else sees. Radar grounds every recommendation in **your own session history**:
+
+- **Claude Code sessions** — every prompt, tool call, and failure from `~/.claude/projects/**`
+- **Cowork sessions** — your chats and workspace history, parsed alongside Claude Code
+- **Installed environment** — MCP servers in `.mcp.json`, allowed tools in `settings.json`, installed plugins
+- **Stated goals** — anything you've written in `CLAUDE.md` about priorities or focus areas
+- **Dismissal history** — what you've rejected before and why (learns your taste over time)
+
+The scoring rubric is explicit about this: `usageGap` gives top marks when session data shows you're doing something manually that a discovered tool automates. `goalAlignment` rewards items that connect to projects you're actively working in. An item that's hot on Hacker News but doesn't connect to your work scores low and gets filtered out.
+
+All parsing happens on your machine. No session data is uploaded anywhere.
 
 ## What You Get
 
@@ -34,13 +48,13 @@ Recommendations:
 ▸ Act Now
 
   1. Claude Code 1-hour prompt caching — Score: 9/10
-     ENABLE_PROMPT_CACHING_1H env var. With 55 sessions/week you're
-     burning through API cache. One env var, immediate cost/speed benefit.
-     → Next step: Add to your settings.json env block.
+     Triggered by: 55 Claude Code sessions last week, long contexts,
+     repeated use of the same skills → high cache-miss cost.
+     → Next step: Add ENABLE_PROMPT_CACHING_1H=1 to settings.json env.
 
   2. @posthog/ai v7.16.0 — Score: 7/10
-     New AI-specific analytics package. You're already using PostHog.
-     Could give you token usage, model performance, and cost tracking.
+     Triggered by: @posthog/node in 3 of your projects, recurring prompts
+     about "token usage" across sessions.
      → Next step: Check @posthog/ai docs, evaluate for your AI features.
 
 ▸ Worth Exploring
@@ -58,11 +72,11 @@ Recommendations:
   The AI coding tool market is converging on the agent paradigm.
 ```
 
-Every recommendation is scored on **goal alignment**, **usage gap**, **recency**, and **effort/impact** — using your actual session data, not generic advice.
+Each recommendation leads with a **Triggered by:** line citing the specific pattern from your Claude Code and Cowork sessions that made it score highly. Scoring weighs **goal alignment**, **usage gap** (manual work a tool would automate), **recency**, and **effort/impact**.
 
 ### Workflow insights from your sessions
 
-Run `/radar-analyze` to parse your Claude Code session history and surface patterns you'd never notice yourself:
+Run `/radar-analyze` to parse your Claude Code and Cowork session history and surface patterns you'd never notice yourself:
 
 ```
 Analyzed 55 sessions (7 days), 8,596 tool calls across 6 projects.
@@ -98,8 +112,8 @@ Run `/radar-review` to browse discoveries and insights in a local web UI. Star t
 
 ## How It Works
 
-- **Scan** — pulls from dependency changelogs across all your local projects, Hacker News, GitHub trending, Anthropic changelog, and YouTube. Deduplicates against your existing catalogue.
-- **Score** — matches each discovery against your installed tools, active projects, and stated goals. Weighted scoring on goal alignment, usage gap, recency, and effort/impact.
+- **Scan** — pulls from dependency changelogs across all your local projects, Hacker News (targeted queries + high-point firehose), GitHub, Anthropic changelog, YouTube, and a people-to-watch list (Karpathy, Simon Willison, et al.). Deduplicates against your existing catalogue.
+- **Score** — parses your Claude Code (`~/.claude/projects/**`) and Cowork sessions locally, then matches each discovery against that data plus installed MCPs, allowed tools, and `CLAUDE.md` goals. Weighted scoring on goal alignment, usage gap, recency, and effort/impact — with a negative prior from past dismissals.
 - **Persist** — everything goes to `~/.claude/radar/catalogue.json`. Single local JSON file, you own it. No accounts, no servers, no external dependencies. Future adapter plugins can sync to Notion, Linear, or anywhere else.
 
 ## Commands
