@@ -63,7 +63,9 @@ For each entry in the `releases` array:
 
 Skip this step if `--sources manual` was specified.
 
-Limit to **10-15 items per source**. If a source fails (timeout, rate limit, format change), log a warning and continue to the next source — never fail the entire run.
+Limit to **10-15 items per source after dedup/merge**, where "per source" means: across all HN targeted queries combined, across all firehose queries combined, across all GitHub queries combined, across all YouTube queries combined, and across the entire watchlist loop combined (not per handle). When trimming to the cap: for HN, keep highest points; for repos/gists, keep most recently updated; for YouTube, keep most recent.
+
+If a source fails (timeout, rate limit, format change), log a warning and continue to the next source — never fail the entire run.
 
 When a source fails, print a clear one-line message: "Source [name] unavailable: [reason]. Continuing with remaining sources."
 
@@ -81,10 +83,10 @@ Use `WebFetch` on the Algolia API. Extract title, URL (use `url` field, fall bac
 
 **Hacker News — firehose (high-point floor):**
 Safety net for high-signal AI stories that don't match targeted queries (e.g. a viral LLM technique gist). Pull broad AI stories with a point floor of 100+:
-- `https://hn.algolia.com/api/v1/search_by_date?query=llm&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP},points>100`
-- `https://hn.algolia.com/api/v1/search_by_date?query=ai&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP},points>100`
+- `https://hn.algolia.com/api/v1/search_by_date?query=llm&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP},points>=100`
+- `https://hn.algolia.com/api/v1/search_by_date?query=ai&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP},points>=100`
 
-Apply the same extraction as the targeted queries. Deduplicate by URL against the targeted-query results within this run.
+Apply the same extraction as the targeted queries. Deduplicate by URL against the targeted-query results within this run. **Dedup merge rule:** when the same URL surfaces from multiple paths (firehose + targeted, watchlist + HN, etc.), keep the first-seen `source` but append every additional discovery path to the item's `notes` array so provenance isn't lost (see watchlist note format below). Apply this same merge rule to cross-source dedup at the end of Step 3.
 
 **People to Watch:**
 High-signal voices in the LLM/agent space whose work often surfaces new patterns before broader discovery. Scan their recent output directly, independent of keyword queries.
@@ -98,7 +100,7 @@ For each handle:
 2. `WebFetch` `https://github.com/{handle}?tab=repositories&sort=updated` — parse for repos updated within `${DAYS}` days.
 3. `WebFetch` `https://hn.algolia.com/api/v1/search_by_date?query={handle}&tags=story&numericFilters=created_at_i>${DAYS_AGO_TIMESTAMP}` — stories mentioning the handle (1+ point; known names are already high-signal).
 
-Items discovered this way carry the natural `source` of their origin URL (`github` for gists/repos, `hackernews` for HN stories). Tag each with `"watchlist:{handle}"` so downstream filtering can trace the discovery path.
+Items discovered this way carry the natural `source` of their origin URL (`github` for gists/repos, `hackernews` for HN stories). Record the discovery path by appending `{ "type": "watchlist", "handle": "{handle}", "at": "<ISO timestamp>" }` to the item's `notes` array. Do **not** inject watchlist provenance into `tags` — `tags` is reserved for the 3–5 workflow/goal descriptors produced by the enrichment subagent and is consumed by downstream scoring prompts (see `radar-recommend`).
 
 If a handle returns no recent activity or a fetch fails, log one line and continue — never fail the run.
 
